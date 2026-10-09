@@ -1,0 +1,8 @@
+# Image chỉ cần thư mục docker/ — mã nguồn được mount lúc chạy.
+.git
+.env
+vendor
+node_modules
+storage
+backups
+tests
