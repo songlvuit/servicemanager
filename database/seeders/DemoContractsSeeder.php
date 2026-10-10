@@ -195,7 +195,8 @@ class DemoContractsSeeder extends Seeder
                     'status' => TaskStatus::from($childStatus),
                     'priority' => TaskPriority::from($priority),
                     'due_date' => today()->addDays($dueInDays),
-                    'estimated_hours' => $hours,
+                    // Bảng trên ghi theo giờ; một buổi (công) là 4 giờ.
+                    'estimated_sessions' => round($hours / 4, 1),
                     'progress' => $progress,
                 ]);
             }

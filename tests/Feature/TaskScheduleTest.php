@@ -14,12 +14,10 @@ use App\Models\Customer;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
 use App\Models\Task;
-use App\Models\Timesheet;
 use App\Models\User;
 use App\Services\Scheduling\CalendarQuery;
 use App\Services\Scheduling\ScheduleConflicts;
 use App\Services\Scheduling\ScheduleManager;
-use App\Services\Scheduling\ScheduleTimesheets;
 use App\Services\Scheduling\TaskSchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -54,8 +52,8 @@ class TaskScheduleTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-07 09:00:00'));
 
         $this->pm = $this->createUserWithRole(SystemRole::ProjectManager, ['name' => 'Dự']);
-        $this->quay = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Quay', 'hourly_rate' => 150000]);
-        $this->sang = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Sáng', 'hourly_rate' => 100000]);
+        $this->quay = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Quay', 'session_rate' => 150000]);
+        $this->sang = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Sáng', 'session_rate' => 100000]);
     }
 
     public function test_a_task_with_a_start_date_gets_its_schedule(): void
@@ -162,7 +160,7 @@ class TaskScheduleTest extends TestCase
 
         // Đổi thứ không liên quan tới lịch thì lịch không bị ghi lại.
         $audits = AuditLog::query()->count();
-        $task->update(['progress' => 10, 'estimated_hours' => 6]);
+        $task->update(['progress' => 10, 'estimated_sessions' => 6]);
         $this->assertSame($audits, AuditLog::query()->count());
 
         // Bỏ ngày bắt đầu: không còn trên lịch. Đặt lại: lên lịch lại.
@@ -222,28 +220,24 @@ class TaskScheduleTest extends TestCase
         $this->assertCount(2, $titles($this->sang));
     }
 
-    public function test_logging_time_from_the_calendar_completes_the_task_and_keeps_both_in_step(): void
+    /**
+     * Dữ liệu của bản trước: lịch đã được "ghi giờ công" thì được giữ lại để
+     * tra cứu, dù công việc bỏ ngày hay bị xoá.
+     */
+    public function test_a_schedule_with_time_logged_by_an_older_version_is_kept(): void
     {
-        $task = $this->makeTask(['name' => 'Quay TVC', 'start_date' => '2026-10-06', 'is_all_day' => false, 'start_time' => '08:00', 'end_time' => '12:00', 'crew_ids' => [$this->sang->getKey()]]);
+        $task = $this->makeTask(['name' => 'Quay TVC', 'start_date' => '2026-10-06', 'is_all_day' => false, 'start_time' => '08:00', 'end_time' => '12:00']);
         $entry = $task->schedule;
-
-        $this->assertSame(2, app(ScheduleTimesheets::class)->log($entry, $this->pm, 4));
-
-        $task->refresh();
-
-        // Giờ công vào đúng công việc; công việc xong theo lịch; lịch vẫn nguyên giờ.
-        $this->assertSame([$task->getKey()], Timesheet::query()->distinct()->pluck('task_id')->all());
-        $this->assertSame(TaskStatus::Done, $task->status);
-        $this->assertSame('1000000.00', $task->actual_cost);
+        // Dòng công chấm tay từ lịch của bản trước (không phải dòng tự sinh).
+        $task->timesheets()->update(['is_auto' => false]);
+        $entry->timesheets()->attach($task->timesheets()->sole()->getKey());
 
         $task->update(['location' => 'Studio B']);
 
         $entry->refresh();
-        $this->assertSame(ScheduleStatus::Done, $entry->status);
         $this->assertSame('2026-10-06 08:00:00', $entry->starts_at->toDateTimeString());
         $this->assertSame('Studio B', $entry->location);
 
-        // Lịch đã ghi giờ công được giữ lại để tra cứu, dù công việc bỏ ngày hay bị xoá.
         $task->update(['start_date' => null]);
         $this->assertSame(1, ScheduleEntry::query()->count());
 

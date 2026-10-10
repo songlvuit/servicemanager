@@ -8,6 +8,7 @@ use App\Exceptions\WorkflowException;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
 use App\Models\Task;
+use App\Services\Tasks\TaskLabor;
 use App\Support\Audit\AuditLogger;
 use App\Support\Decimal;
 use Illuminate\Support\Facades\DB;
@@ -87,22 +88,6 @@ class ScheduleTasks
     }
 
     /**
-     * Lịch của một công việc vừa được đánh dấu "Đã xong" (khi ghi giờ công):
-     * công việc cũng xong theo.
-     */
-    public function completed(ScheduleEntry $entry): void
-    {
-        $task = $entry->task_id !== null ? Task::query()->find($entry->task_id) : null;
-
-        if ($task === null || ! $entry->from_task || ! $task->status->isOpen()) {
-            return;
-        }
-
-        $task->status = TaskStatus::Done;
-        TaskSchedule::withoutSync(fn () => $task->save());
-    }
-
-    /**
      * Sau khi xoá lịch: bỏ luôn công việc do lịch tạo ra nếu chưa có gì gắn vào.
      */
     public function discardIfUntouched(Task $task, int|string|null $exceptEntryId = null): bool
@@ -122,7 +107,7 @@ class ScheduleTasks
 
     /**
      * Tạo công việc cho những lịch chưa có (lịch tạo trước khi có tính năng
-     * này), và gắn giờ công đã ghi từ lịch vào công việc đó.
+     * này), và gắn công của nhân sự đã ghi từ lịch vào công việc đó.
      *
      * @return int Số công việc vừa tạo.
      */
@@ -148,6 +133,9 @@ class ScheduleTasks
                                 $timesheet->update(['task_id' => $task->getKey()]);
                             }
                         });
+
+                        // Người / ngày đã có công chấm từ trước thì không tính thêm công tự sinh.
+                        app(TaskLabor::class)->sync($task);
                     });
                 });
 

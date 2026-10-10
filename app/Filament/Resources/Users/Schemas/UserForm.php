@@ -43,11 +43,11 @@ class UserForm
                         TextInput::make('position')
                             ->label('Chức danh')
                             ->maxLength(255),
-                        Fields::money('hourly_rate')
-                            ->label('Đơn giá giờ công')
+                        Fields::money('session_rate')
+                            ->label('Đơn giá / buổi (công)')
                             ->default(0)
-                            ->suffix('₫ / giờ')
-                            ->helperText('Dùng để tính chi phí nhân sự của công việc từ chấm công. Để 0 nếu không tính.'),
+                            ->suffix('₫ / buổi')
+                            ->helperText('Chi phí nhân sự của công việc = số buổi được phân công × đơn giá này. Để 0 nếu không tính. Đổi đơn giá chỉ áp dụng cho công từ hôm nay trở đi.'),
                     ]),
 
                 Section::make('Mật khẩu')

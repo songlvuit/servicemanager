@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\SystemRole;
 use App\Models\Concerns\Auditable;
+use App\Services\Tasks\TaskLabor;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -32,7 +33,7 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'phone',
         'position',
-        'hourly_rate',
+        'session_rate',
         'is_active',
     ];
 
@@ -49,7 +50,7 @@ class User extends Authenticatable implements FilamentUser
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'hourly_rate' => 0,
+        'session_rate' => 0,
         'is_active' => true,
     ];
 
@@ -61,9 +62,19 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'hourly_rate' => 'decimal:2',
+            'session_rate' => 'decimal:2',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Đổi đơn giá buổi: công tự sinh từ hôm nay trở đi tính theo đơn giá mới.
+        static::updated(function (User $user): void {
+            if ($user->wasChanged('session_rate')) {
+                app(TaskLabor::class)->reprice($user);
+            }
+        });
     }
 
     /**

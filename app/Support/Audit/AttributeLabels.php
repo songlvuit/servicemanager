@@ -28,7 +28,7 @@ class AttributeLabels
         'is_primary' => 'Liên hệ chính',
         'is_active' => 'Đang hoạt động',
         'password' => 'Mật khẩu',
-        'hourly_rate' => 'Đơn giá giờ công',
+        'session_rate' => 'Đơn giá buổi (công)',
         'customer_id' => 'Khách hàng',
         'contract_id' => 'Hợp đồng',
         'quotation_id' => 'Báo giá',

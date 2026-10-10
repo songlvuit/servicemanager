@@ -69,11 +69,6 @@ class ScheduleRelationManager extends RelationManager
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge(),
-                TextColumn::make('timesheets_logged_at')
-                    ->label('Giờ công')
-                    ->formatStateUsing(fn (): string => 'Đã ghi')
-                    ->placeholder('Chưa ghi')
-                    ->toggleable(),
             ])
             ->recordUrl(fn (ScheduleEntry $record): string => WorkCalendar::entryUrl($record))
             ->defaultSort('starts_at', 'desc')

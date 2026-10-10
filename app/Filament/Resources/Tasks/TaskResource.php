@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Tasks;
 use App\Filament\Resources\Tasks\Pages\ManageTasks;
 use App\Filament\Resources\Tasks\Pages\TaskBoard;
 use App\Filament\Resources\Tasks\Pages\ViewTask;
+use App\Filament\Resources\Tasks\RelationManagers\CostsRelationManager;
 use App\Filament\Resources\Tasks\RelationManagers\ExpensesRelationManager;
 use App\Filament\Resources\Tasks\RelationManagers\PurchasesRelationManager;
 use App\Filament\Resources\Tasks\RelationManagers\ScheduleRelationManager;
@@ -63,6 +64,7 @@ class TaskResource extends Resource
     public static function getRelations(): array
     {
         return [
+            CostsRelationManager::class,
             ExpensesRelationManager::class,
             PurchasesRelationManager::class,
             TimesheetsRelationManager::class,

@@ -77,6 +77,22 @@ class Settings
                     'type' => self::TYPE_PERCENT,
                 ],
             ],
+            'Chấm công theo buổi (công)' => [
+                'job.session_hours' => [
+                    'label' => 'Một buổi (công) dài khoảng bao nhiêu giờ',
+                    'type' => self::TYPE_INTEGER,
+                    'min' => 1,
+                    'max' => 12,
+                    'help' => 'Công việc có giờ: số buổi mỗi ngày = thời lượng ÷ số giờ này, làm tròn, ít nhất 1 buổi. Ví dụ 4 giờ: 08:00–12:00 là 1 buổi, 08:00–17:00 là 2 buổi.',
+                ],
+                'job.sessions_per_day' => [
+                    'label' => 'Công việc cả ngày tính mấy buổi mỗi ngày',
+                    'type' => self::TYPE_INTEGER,
+                    'min' => 1,
+                    'max' => 4,
+                    'help' => 'Áp dụng cho công việc không nhập giờ. Chỉ ảnh hưởng tới công tự tính từ nay; công đã có giữ nguyên.',
+                ],
+            ],
             'Hóa đơn & công nợ' => [
                 'billing.payment_term_days' => ['label' => 'Hạn thanh toán mặc định (ngày)', 'type' => self::TYPE_INTEGER, 'min' => 0, 'max' => 365],
                 'billing.default_tax_rate' => ['label' => 'Thuế GTGT (VAT) mặc định của hóa đơn', 'type' => self::TYPE_PERCENT],

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Một dòng CHI PHÍ THỰC TẾ (trước thuế), đọc từ view `cost_lines`:
- * đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng và giờ công đã chấm.
+ * đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng và công của nhân sự đã chấm.
  * Dòng không gắn công việc (task_id rỗng) là chi phí chung của công ty.
  * Chỉ đọc — dùng cho báo cáo và biểu đồ.
  */

@@ -131,7 +131,8 @@ class ReportsTest extends TestCase
         $unpaid = $this->approveExpense($this->makeExpense($job, attributes: ['amount' => 9000000]));
         $timesheet = Timesheet::factory()->create([
             'task_id' => $otherJob->getKey(),
-            'user_id' => $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 100000])->getKey(),
+            // 2 buổi × 400.000.
+            'user_id' => $this->createUserWithRole(SystemRole::Employee, ['session_rate' => 400000])->getKey(),
         ]);
 
         $expenseLine = CostLine::query()->findOrFail('expense-'.$paid->getKey());

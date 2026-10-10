@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Báo cáo chi phí (mục 62): từng khoản CHI PHÍ THỰC TẾ trước thuế — đề nghị
- * chi đã thanh toán, đơn mua hàng đã nhận hàng và giờ công. Khoản không gắn
+ * chi đã thanh toán, đơn mua hàng đã nhận hàng và công của nhân sự. Khoản không gắn
  * công việc nào được xếp vào "Chi phí chung".
  */
 class CostReport extends ReportPage
@@ -41,7 +41,7 @@ class CostReport extends ReportPage
 
     protected static ?int $navigationSort = 42;
 
-    protected ?string $subheading = 'Chi phí thực tế trước thuế, theo từng công việc và cả chi phí chung không gắn công việc: đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng, giờ công.';
+    protected ?string $subheading = 'Chi phí thực tế trước thuế, theo từng công việc và cả chi phí chung không gắn công việc: đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng, công của nhân sự.';
 
     protected function getHeaderActions(): array
     {
@@ -152,6 +152,6 @@ class CostReport extends ReportPage
             ->defaultPaginationPageOption(25)
             ->emptyStateIcon(Heroicon::OutlinedBanknotes)
             ->emptyStateHeading('Chưa có chi phí thực tế.')
-            ->emptyStateDescription('Chi phí xuất hiện khi đề nghị chi được thanh toán, hàng được nhận hoặc giờ công được chấm.');
+            ->emptyStateDescription('Chi phí xuất hiện khi đề nghị chi được thanh toán, hàng được nhận hoặc nhân sự được phân công vào công việc.');
     }
 }

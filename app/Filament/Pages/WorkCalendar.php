@@ -12,7 +12,6 @@ use App\Models\User;
 use App\Services\Scheduling\CalendarQuery;
 use App\Services\Scheduling\ScheduleConflicts;
 use App\Services\Scheduling\ScheduleManager;
-use App\Services\Scheduling\ScheduleTimesheets;
 use App\Support\Audit\AuditLogger;
 use App\Support\Money;
 use App\Support\PublicCalendarLink;
@@ -23,7 +22,6 @@ use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -45,7 +43,7 @@ use UnitEnum;
  * Trang này CHỈ ĐỂ XEM lịch công việc: lịch tự lấy từ Công việc (công việc có
  * ngày bắt đầu), nên không có nút thêm / sửa / xoá lịch công việc — việc đó
  * làm ở mục Công việc. Ở đây chỉ còn: đăng ký nghỉ, sửa / xoá
- * lịch nghỉ, ghi giờ công từ lịch và chia sẻ lịch.
+ * lịch nghỉ và chia sẻ lịch.
  *
  * Bốn cách xem: tuần (sáng / chiều), tháng, theo người, lịch của tôi.
  */
@@ -256,7 +254,7 @@ class WorkCalendar extends Page
     }
 
     /**
-     * Chi tiết một lịch (ai cũng mở được). Nút Sửa / Ghi giờ công / Xoá hiện theo quyền.
+     * Chi tiết một lịch (ai cũng mở được). Nút Sửa / Xoá hiện theo quyền.
      */
     public function viewEntryAction(): Action
     {
@@ -290,12 +288,6 @@ class WorkCalendar extends Page
                         ->icon(Heroicon::OutlinedPencilSquare)
                         ->visible($entry->isLeave() && $user->can('update', $entry))
                         ->action($open('editEntry')),
-                    Action::make('timesheets')
-                        ->label('Ghi giờ công')
-                        ->icon(Heroicon::OutlinedClock)
-                        ->color('gray')
-                        ->visible($this->canLogTimesheets($entry))
-                        ->action($open('logTimesheets')),
                     Action::make('delete')
                         ->label('Xoá')
                         ->icon(Heroicon::OutlinedTrash)
@@ -346,52 +338,6 @@ class WorkCalendar extends Page
                     app(ScheduleManager::class)->delete($this->leaveEntry($arguments), auth()->user());
 
                     Notification::make()->title('Đã xoá lịch.')->success()->send();
-                });
-            });
-    }
-
-    /**
-     * Ghi giờ công cho cả ê-kíp từ một lịch đã diễn ra.
-     */
-    public function logTimesheetsAction(): Action
-    {
-        return Action::make('logTimesheets')
-            ->modalHeading('Ghi giờ công từ lịch')
-            ->modalDescription(function (array $arguments): string {
-                $entry = $this->findEntry($arguments);
-
-                return $entry === null ? '' : $entry->title.' · ê-kíp: '.$entry->crew->pluck('name')->implode(', ');
-            })
-            ->modalSubmitActionLabel('Ghi giờ công')
-            ->modalWidth(Width::Large)
-            ->fillForm(fn (array $arguments): array => [
-                'hours' => ($entry = $this->findEntry($arguments)) ? app(ScheduleTimesheets::class)->suggestedHours($entry) : null,
-            ])
-            ->schema([
-                TextInput::make('hours')
-                    ->label('Số giờ mỗi người, mỗi ngày')
-                    ->numeric()
-                    ->minValue(0.25)
-                    ->maxValue(24)
-                    ->required()
-                    ->suffix('giờ')
-                    ->helperText('Mỗi người trong ê-kíp được ghi số giờ này cho từng ngày của lịch, vào công việc của lịch. Người / ngày đã ghi rồi sẽ được bỏ qua. Lịch chuyển sang "Đã xong".'),
-            ])
-            ->action(function (array $data, array $arguments): void {
-                $this->guarded(function () use ($data, $arguments): void {
-                    $entry = $this->findEntry($arguments);
-
-                    if ($entry === null) {
-                        throw new WorkflowException('Lịch không còn tồn tại.');
-                    }
-
-                    $created = app(ScheduleTimesheets::class)->log($entry, auth()->user(), $data['hours']);
-
-                    Notification::make()
-                        ->title($created > 0 ? "Đã ghi {$created} dòng giờ công." : 'Giờ công của lịch này đã được ghi từ trước.')
-                        ->body($created > 0 ? 'Chi phí nhân sự đã được cộng vào công việc của lịch.' : null)
-                        ->success()
-                        ->send();
                 });
             });
     }
@@ -585,14 +531,6 @@ class WorkCalendar extends Page
 
     // --- Hỗ trợ -------------------------------------------------------------
 
-    public function canLogTimesheets(ScheduleEntry $entry): bool
-    {
-        return ! $entry->isLeave()
-            && $entry->status->occupiesTime()
-            && $entry->starts_at->isPast()
-            && (auth()->user()?->can('logTimesheets', $entry) ?? false);
-    }
-
     /**
      * Lịch nghỉ đang được sửa / xoá từ trang Lịch. Lịch công việc không sửa
      * được ở đây: nó đi theo công việc.
@@ -689,8 +627,6 @@ class WorkCalendar extends Page
             $text('notes', 'Ghi chú', $entry->notes)
                 ->hidden(blank($entry->notes))
                 ->columnSpanFull(),
-            $text('timesheets', 'Giờ công', $entry->timesheets_logged_at ? 'Đã ghi lúc '.$entry->timesheets_logged_at->format('d/m/Y H:i') : null)
-                ->hidden($entry->timesheets_logged_at === null),
             $text('creator', 'Người tạo', $entry->creator?->name)
                 ->color('gray'),
         ];

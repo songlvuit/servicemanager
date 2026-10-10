@@ -20,7 +20,7 @@ use Illuminate\Contracts\Support\Htmlable;
 
 /**
  * Trang của một công việc: nơi quản lý tiền của "job" — ngân sách, đề nghị
- * chi, mua hàng, giờ công — và xem các lịch làm việc gắn với nó.
+ * chi, mua hàng, công của nhân sự — và xem các lịch làm việc gắn với nó.
  */
 class ViewTask extends ViewRecord
 {

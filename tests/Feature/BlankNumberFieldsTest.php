@@ -76,7 +76,7 @@ class BlankNumberFieldsTest extends TestCase
         $this->assertSame('0.00', $service->refresh()->default_cost);
     }
 
-    public function test_user_can_be_saved_with_a_blank_hourly_rate(): void
+    public function test_user_can_be_saved_with_a_blank_session_rate(): void
     {
         Livewire::test(CreateUser::class)
             ->fillForm([
@@ -85,23 +85,23 @@ class BlankNumberFieldsTest extends TestCase
                 'password' => 'mat-khau-123',
                 'password_confirmation' => 'mat-khau-123',
                 'roles' => [Role::findByName(SystemRole::Employee->value)->getKey()],
-                'hourly_rate' => null,
+                'session_rate' => null,
             ])
             ->call('create')
             ->assertHasNoFormErrors();
 
         $user = User::query()->where('email', 'a@example.com')->sole();
 
-        $this->assertSame('0.00', $user->hourly_rate);
+        $this->assertSame('0.00', $user->session_rate);
 
-        $user->update(['hourly_rate' => 150000]);
+        $user->update(['session_rate' => 150000]);
 
         Livewire::test(EditUser::class, ['record' => $user->getRouteKey()])
-            ->fillForm(['hourly_rate' => ''])
+            ->fillForm(['session_rate' => ''])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('0.00', $user->refresh()->hourly_rate);
+        $this->assertSame('0.00', $user->refresh()->session_rate);
     }
 
     public function test_task_can_be_saved_with_blank_hours_and_progress(): void
@@ -109,14 +109,14 @@ class BlankNumberFieldsTest extends TestCase
         Livewire::test(ManageTasks::class)
             ->callAction('create', data: [
                 'name' => 'Viết kịch bản',
-                'estimated_hours' => null,
+                'estimated_sessions' => null,
                 'progress' => null,
             ])
             ->assertHasNoFormErrors();
 
         $task = Task::query()->sole();
 
-        $this->assertSame('0.00', $task->estimated_hours);
+        $this->assertSame('0.00', $task->estimated_sessions);
         $this->assertSame(0, $task->progress);
     }
 

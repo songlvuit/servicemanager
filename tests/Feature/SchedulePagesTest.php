@@ -18,7 +18,6 @@ use App\Models\Customer;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
 use App\Models\Task;
-use App\Models\Timesheet;
 use App\Models\User;
 use App\Services\Scheduling\ScheduleManager;
 use App\Support\PublicCalendarLink;
@@ -52,7 +51,7 @@ class SchedulePagesTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-07 09:00:00'));
 
         $this->pm = $this->createUserWithRole(SystemRole::ProjectManager, ['name' => 'Lê Dự']);
-        $this->employee = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Ngô Quay', 'hourly_rate' => 150000]);
+        $this->employee = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Ngô Quay', 'session_rate' => 150000]);
     }
 
     public function test_every_role_can_open_the_calendar_in_every_view(): void
@@ -269,10 +268,9 @@ class SchedulePagesTest extends TestCase
             ->assertActionHidden('publicLink')
             ->assertActionVisible('registerLeave')
             ->assertActionVisible('subscribe')
-            // Mở chi tiết được, nhưng không có nút sửa / xoá / ghi giờ công.
+            // Mở chi tiết được, nhưng không có nút sửa / xoá.
             ->assertActionHidden([$view($entry), 'edit'])
             ->assertActionHidden([$view($entry), 'delete'])
-            ->assertActionHidden([$view($entry), 'timesheets'])
             ->assertActionHidden([$view($othersLeave), 'edit'])
             ->assertActionHidden([$view($othersLeave), 'delete'])
             // Cố gọi thẳng thao tác sửa / xoá cũng bị từ chối: lịch công việc thì không sửa ở đây,
@@ -314,23 +312,6 @@ class SchedulePagesTest extends TestCase
             ->assertActionVisible([$view($leave), 'delete']);
 
         $this->get(WorkCalendar::getUrl(['date' => '2026-10-14']))->assertSee('Nghỉ: Ngô Quay');
-    }
-
-    public function test_timesheets_are_logged_from_the_calendar(): void
-    {
-        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->employee], ['title' => 'Quay TVC']);
-
-        $this->actingAs($this->pm);
-
-        Livewire::test(WorkCalendar::class)
-            ->assertActionVisible([TestAction::make('viewEntry')->arguments(['entry' => $entry->getKey()]), 'timesheets'])
-            ->mountAction('logTimesheets', ['entry' => $entry->getKey()])
-            ->assertActionDataSet(['hours' => '4'])
-            ->callMountedAction()
-            ->assertNotified('Đã ghi 1 dòng giờ công.');
-
-        $this->assertSame('600000.00', Timesheet::query()->sole()->cost);
-        $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
     }
 
     public function test_public_link_is_off_by_default_and_is_controlled_by_planners(): void

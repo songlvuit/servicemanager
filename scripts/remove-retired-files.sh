@@ -20,8 +20,8 @@ if [ ! -f artisan ] || [ ! -d app ]; then
     exit 1
 fi
 
-# Module Dự án và Ngân sách (đã bỏ: phần mềm chỉ còn quản lý Công việc).
 RETIRED=(
+    # Module Dự án và Ngân sách (đã bỏ: phần mềm chỉ còn quản lý Công việc).
     app/Enums/ProjectStatus.php
     app/Filament/Resources/BudgetItems
     app/Filament/Resources/Projects
@@ -48,6 +48,8 @@ RETIRED=(
     tests/Feature/BudgetTest.php
     tests/Feature/ProjectTest.php
     tests/Feature/WithoutProjectTest.php
+    # Nút "Ghi giờ công từ lịch" (đã bỏ: công tự tính theo phân công).
+    app/Services/Scheduling/ScheduleTimesheets.php
 )
 
 removed=0

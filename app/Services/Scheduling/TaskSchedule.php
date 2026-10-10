@@ -80,7 +80,7 @@ class TaskSchedule
         $by = auth()->user();
 
         if ($attributes === null) {
-            // Không còn lên lịch. Lịch đã ghi giờ công thì giữ lại để tra cứu.
+            // Không còn lên lịch. Lịch đã ghi công của nhân sự thì giữ lại để tra cứu.
             if ($entry !== null && ! $entry->timesheets()->exists()) {
                 $this->manager->discard($entry, $by instanceof User ? $by : null);
             }
@@ -97,7 +97,7 @@ class TaskSchedule
     }
 
     /**
-     * Công việc sắp bị xoá: bỏ lịch của nó (lịch đã ghi giờ công thì giữ lại).
+     * Công việc sắp bị xoá: bỏ lịch của nó (lịch đã ghi công của nhân sự thì giữ lại).
      */
     public function forget(Task $task): void
     {

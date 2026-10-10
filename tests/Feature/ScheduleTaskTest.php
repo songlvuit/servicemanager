@@ -31,7 +31,6 @@ use App\Services\Purchasing\PurchaseOrderWorkflow;
 use App\Services\Purchasing\PurchaseRequestWorkflow;
 use App\Services\Scheduling\ScheduleManager;
 use App\Services\Scheduling\ScheduleTasks;
-use App\Services\Scheduling\ScheduleTimesheets;
 use App\Support\Decimal;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Testing\TestAction;
@@ -73,8 +72,8 @@ class ScheduleTaskTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-07 09:00:00'));
 
         $this->pm = $this->approver(SystemRole::ProjectManager);
-        $this->quay = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Quay', 'hourly_rate' => 150000]);
-        $this->sang = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Sáng', 'hourly_rate' => 100000]);
+        $this->quay = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Quay', 'session_rate' => 150000]);
+        $this->sang = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Sáng', 'session_rate' => 100000]);
     }
 
     public function test_a_new_schedule_creates_its_task_with_a_budget(): void
@@ -214,9 +213,10 @@ class ScheduleTaskTest extends TestCase
         $this->approveExpense($this->makeExpenseFor($task, 700000));
         $this->makeExpenseFor($task, 9000000);
 
+        // Công của ê-kíp tự có ngay khi phân công: 08:00–12:00 là 1 buổi, 150.000 + 100.000.
         $task->refresh();
-        $this->assertSame('2700000.00', $task->committed_cost);
-        $this->assertSame('2000000.00', $task->actual_cost);
+        $this->assertSame('2950000.00', $task->committed_cost);
+        $this->assertSame('2250000.00', $task->actual_cost);
 
         // Đơn mua hàng đã nhận: 2 × 900.000 trước thuế.
         $orders = app(PurchaseOrderWorkflow::class);
@@ -224,35 +224,34 @@ class ScheduleTaskTest extends TestCase
         $order->items()->create(['description' => 'Cáp HDMI', 'quantity' => 2, 'unit_price' => 900000, 'tax_rate' => 10]);
         $orders->receive($orders->order($orders->recalculate($order), $this->approver(SystemRole::SuperAdmin)), $this->approver(SystemRole::SuperAdmin));
 
-        // Ghi giờ công từ lịch: 4 giờ × (150.000 + 100.000), vào đúng công việc của lịch.
-        $this->assertSame(2, app(ScheduleTimesheets::class)->log($entry, $this->pm, 4));
+        // Hai dòng công tự sinh, vào đúng công việc của lịch.
+        $this->assertSame(2, Timesheet::query()->where('is_auto', true)->count());
         $this->assertSame([$task->getKey()], Timesheet::query()->distinct()->pluck('task_id')->all());
 
         $task->refresh();
-        $this->assertSame('5500000.00', $task->committed_cost);
-        $this->assertSame('4800000.00', $task->actual_cost);
-        $this->assertSame('8.00', $task->actual_hours);
-        $this->assertSame('200000.00', $task->remainingBudget());
+        $this->assertSame('4750000.00', $task->committed_cost);
+        $this->assertSame('4050000.00', $task->actual_cost);
+        $this->assertSame('2.00', $task->actual_sessions);
+        $this->assertSame('950000.00', $task->remainingBudget());
         $this->assertFalse($task->isOverBudget());
-        $this->assertSame(TaskStatus::Done, $task->status);
 
         // Việc không gắn hợp đồng: chi phí tính cho công việc, không vào hợp đồng nào; dòng chi phí ghi rõ công việc.
         $this->assertSame($task->getKey(), CostLine::query()->findOrFail('expense-'.$paid->getKey())->task_id);
-        $this->assertSame('4800000.00', Decimal::round(CostLine::query()->where('task_id', $task->getKey())->sum('amount')));
+        $this->assertSame('4050000.00', Decimal::round(CostLine::query()->where('task_id', $task->getKey())->sum('amount')));
 
         // Thêm một khoản nữa thì vượt ngân sách; xoá chứng từ thì chi phí giảm lại.
-        $extra = $this->payExpense($this->makeExpenseFor($task, 300000));
+        $extra = $this->payExpense($this->makeExpenseFor($task, 1000000));
         $this->assertTrue($task->refresh()->isOverBudget());
 
-        Timesheet::query()->first()->delete();
-        $this->assertSame('4500000.00', $task->refresh()->actual_cost);
+        Timesheet::query()->orderBy('id')->first()->delete();
+        $this->assertSame('4900000.00', $task->refresh()->actual_cost);
 
         // Chuyển chứng từ sang công việc khác: cả hai công việc được tính lại.
         $other = Task::factory()->create();
         $extra->update(['task_id' => $other->getKey()]);
 
-        $this->assertSame('4200000.00', $task->refresh()->actual_cost);
-        $this->assertSame('300000.00', $other->refresh()->actual_cost);
+        $this->assertSame('3900000.00', $task->refresh()->actual_cost);
+        $this->assertSame('1000000.00', $other->refresh()->actual_cost);
     }
 
     public function test_crew_members_see_the_task_and_can_charge_expenses_to_it(): void
@@ -303,8 +302,8 @@ class ScheduleTaskTest extends TestCase
     {
         $entry = $this->schedule(['title' => 'Livestream hội thảo', 'task_budget' => 5000000], [$this->quay], '2026-10-06 08:00', '2026-10-06 12:00');
         $task = $entry->task;
+        // 6.000.000 đề nghị chi + công của Quay tự tính (1 buổi × 150.000).
         $expense = $this->payExpense($this->makeExpenseFor($task, 6000000));
-        app(ScheduleTimesheets::class)->log($entry, $this->pm, 4);
 
         $this->actingAs($this->pm);
 
@@ -312,12 +311,16 @@ class ScheduleTaskTest extends TestCase
             ->assertOk()
             ->assertSee('Tiền &amp; ngân sách', false)
             ->assertSee('5.000.000 ₫')
-            ->assertSee('6.600.000 ₫')
+            ->assertSee('6.150.000 ₫')
+            ->assertSee('Trong đó: nhân sự')
+            ->assertSee('1 buổi (công) của 1 người')
             ->assertSee('Vượt ngân sách');
 
-        // Công việc đã huỷ thì không mời tạo thêm chứng từ; việc đã xong (do ghi giờ công) vẫn nhận chi phí về sau.
-        $this->assertSame(TaskStatus::Done, $task->refresh()->status);
+        // Công việc đã huỷ thì không mời tạo thêm chứng từ và không còn công tự sinh; việc đã xong vẫn nhận chi phí về sau.
         $task->update(['status' => TaskStatus::Cancelled]);
+
+        $this->assertSame(0, $task->timesheets()->count());
+        $this->assertSame('6000000.00', $task->refresh()->actual_cost);
 
         Livewire::test(ViewTask::class, ['record' => $task->getRouteKey()])
             ->assertActionHidden('createExpense')
@@ -339,25 +342,28 @@ class ScheduleTaskTest extends TestCase
         Livewire::test(ScheduleRelationManager::class, ['ownerRecord' => $task, 'pageClass' => ViewTask::class])
             ->assertCanSeeTableRecords([$entry]);
 
-        // Ghi giờ công ngay trên trang công việc: tự vào công việc này.
+        // Mở lại công việc: công của Quay được tính lại. Thêm công cho người ngoài ê-kíp ngay trên trang công việc.
+        $this->assertSame('6150000.00', $task->refresh()->actual_cost);
+
         Livewire::test(TimesheetsRelationManager::class, ['ownerRecord' => $task, 'pageClass' => ViewTask::class])
             ->assertCountTableRecords(1)
+            ->assertSee('Tự động')
             ->callAction(TestAction::make('create')->table(), data: [
                 'user_id' => $this->sang->getKey(),
                 'work_date' => '2026-10-06',
-                'hours' => 2,
+                'sessions' => 2,
             ])
             ->assertHasNoActionErrors();
 
         $this->assertSame(2, $task->timesheets()->count());
-        $this->assertSame('6800000.00', $task->refresh()->actual_cost);
+        $this->assertSame('6350000.00', $task->refresh()->actual_cost);
 
         // Danh sách công việc có cột tiền; báo cáo chi phí ghi công việc.
         Livewire::test(ManageTasks::class)
             ->set('activeTab', 'all')
             ->assertCanSeeTableRecords([$task])
             ->assertSee('Chi phí / ngân sách')
-            ->assertSee('6.800.000 ₫')
+            ->assertSee('6.350.000 ₫')
             ->assertSee('Ngân sách 8.000.000 ₫');
 
         $this->actingAs($this->approver(SystemRole::Accountant));
@@ -367,7 +373,8 @@ class ScheduleTaskTest extends TestCase
 
     public function test_purchase_request_for_a_task_passes_the_task_to_its_order(): void
     {
-        $task = $this->schedule(['title' => 'Show ca nhạc'], [$this->quay])->task;
+        // Chưa phân công ai nên chưa có công: chỉ xét chi phí mua hàng.
+        $task = $this->schedule(['title' => 'Show ca nhạc'])->task;
         $procurement = $this->approver(SystemRole::Procurement);
 
         $this->actingAs($procurement);
@@ -427,8 +434,9 @@ class ScheduleTaskTest extends TestCase
         $cancelled = $this->makeEntry('2026-10-09 13:00', '2026-10-09 17:00', [], ['title' => 'Khảo sát', 'status' => ScheduleStatus::Cancelled]);
         $leave = $this->makeEntry('2026-10-09 08:00', '2026-10-09 12:00', [$this->quay], ['schedule_type_id' => ScheduleType::leave()->getKey()]);
 
-        // Giờ công đã ghi từ lịch trước khi lịch có công việc.
-        app(ScheduleTimesheets::class)->log($past, $this->pm, 4);
+        // Công đã chấm từ lịch (bản trước) khi lịch chưa có công việc: 4 buổi × 150.000.
+        $past->timesheets()->attach(Timesheet::factory()->create(['user_id' => $this->quay->getKey(), 'work_date' => '2026-10-05', 'sessions' => 4])->getKey());
+        ScheduleEntry::query()->whereKey($past->getKey())->update(['status' => ScheduleStatus::Done]);
         $this->assertNull(Timesheet::query()->sole()->task_id);
 
         $this->assertSame(3, app(ScheduleTasks::class)->backfill());
@@ -440,9 +448,13 @@ class ScheduleTaskTest extends TestCase
         $this->assertSame('Quay TVC', $pastTask->name);
         $this->assertSame(TaskStatus::Done, $pastTask->status);
         $this->assertSame($this->quay->getKey(), $pastTask->assignee_id);
-        $this->assertSame($pastTask->getKey(), Timesheet::query()->sole()->task_id);
+        // Người / ngày đã chấm công từ trước thì giữ dòng cũ, không tính thêm công tự sinh.
+        $this->assertSame($pastTask->getKey(), $pastTask->timesheets()->sole()->task_id);
+        $this->assertFalse($pastTask->timesheets()->sole()->is_auto);
         $this->assertSame('600000.00', $pastTask->actual_cost);
-        $this->assertSame('4.00', $pastTask->actual_hours);
+        $this->assertSame('4.00', $pastTask->actual_sessions);
+        // Lịch chưa chấm công: công tự sinh theo ê-kíp (Sáng, 1 buổi × 100.000).
+        $this->assertSame('100000.00', $future->refresh()->task->actual_cost);
 
         $this->assertSame(TaskStatus::Todo, $future->refresh()->task->status);
         $this->assertSame(TaskStatus::Cancelled, $cancelled->refresh()->task->status);

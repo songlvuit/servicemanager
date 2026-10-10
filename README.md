@@ -123,7 +123,7 @@ Với `AUTO_MIGRATE=true`, migration tự chạy mỗi lần container `app` kh�
 | `DevUserSeeder` | Tài khoản mẫu | Chỉ môi trường phát triển (tự bỏ qua khi `APP_ENV=production`). |
 | `DemoDataSeeder` | 11 dịch vụ, 5 khách hàng, 10 liên hệ, 6 cơ hội, 10 báo giá ở đủ các trạng thái | Chỉ môi trường phát triển. Chỉ chạy khi chưa có khách hàng nào. |
 | `DemoContractsSeeder` | 5 hợp đồng, 8 công việc lớn gắn hợp đồng (có ngân sách) và 20 công việc con | Chỉ môi trường phát triển. Chỉ chạy khi chưa có hợp đồng nào. |
-| `DemoOperationsSeeder` | 5 nhà cung cấp, đề nghị chi ở đủ các bước duyệt, yêu cầu mua hàng, đơn mua hàng, giờ công | Chỉ môi trường phát triển. Chỉ chạy khi chưa có đề nghị chi nào. |
+| `DemoOperationsSeeder` | 5 nhà cung cấp, đề nghị chi ở đủ các bước duyệt, yêu cầu mua hàng, đơn mua hàng, công nhập tay cho các việc dài ngày | Chỉ môi trường phát triển. Chỉ chạy khi chưa có đề nghị chi nào. |
 | `DemoBillingSeeder` | 4 biên bản nghiệm thu, 10 hóa đơn (nháp, đã phát hành, thu một phần, đã thu đủ, quá hạn), 10 lần thanh toán | Chỉ môi trường phát triển. Chỉ chạy khi chưa có hóa đơn nào. |
 | `DemoScheduleSeeder` | 4 tài khoản ê-kíp và 20 lịch quanh tuần hiện tại (có lịch nhiều ngày, lịch dự kiến, lịch đã huỷ, một ngày nghỉ, một trường hợp trùng lịch) | Chỉ môi trường phát triển. Chỉ chạy khi chưa có lịch nào. |
 
@@ -172,7 +172,7 @@ app/
     Approvals/              Bộ máy duyệt theo bảng approval_rules
     Reports/                Doanh thu – chi phí – lợi nhuận theo tháng, doanh thu theo dịch vụ
     Notifications/          Nhắc việc hằng ngày
-    Scheduling/             Lịch làm việc: lưu lịch, trùng lịch, thông báo, các cách xem, iCalendar, ghi giờ công
+    Scheduling/             Lịch làm việc: lưu lịch, trùng lịch, thông báo, các cách xem, iCalendar
     Sequences/              Sinh mã chứng từ (CUS-, QT-, HD-, PRJ-, EXP-, PR-, PO-, NT-, INV-…)
   Support/
     Money.php, Decimal.php  Định dạng VND và phép tính tiền chính xác (không dùng float)
@@ -290,7 +290,7 @@ Migration `2026_07_05_000000_remove_projects` tự chuyển dữ liệu, **khôn
 |---|---|
 | Dự án | Một công việc (tên, mô tả, người quản lý → người phụ trách, ngày bắt đầu / kết thúc, ngân sách, hợp đồng, báo giá, khách hàng). Dự án đã huỷ / đã xoá → công việc *Đã huỷ* |
 | Công việc của dự án | Công việc con của công việc đó, cùng hợp đồng |
-| Đề nghị chi, mua hàng, giờ công gắn dự án (không gắn công việc) | Gắn vào công việc đó — chi phí của công việc bằng đúng chi phí của dự án trước đây |
+| Đề nghị chi, mua hàng, công gắn dự án (không gắn công việc) | Gắn vào công việc đó — chi phí của công việc bằng đúng chi phí của dự án trước đây |
 | Nghiệm thu, hóa đơn, tài liệu của dự án | Gắn vào hợp đồng của dự án |
 | Ngân sách theo nhóm, thành viên dự án | Bỏ (ngân sách còn một số tổng trên công việc) |
 | Quyền Dự án, Ngân sách | Bỏ. Kinh doanh và Quản lý công việc mất quyền Báo giá, Hợp đồng, Nghiệm thu, Hóa đơn, Thanh toán, Công nợ; Kế toán được lập báo giá, hợp đồng, nghiệm thu; Giám đốc toàn quyền với ba mục này và với Công việc. Vai trò tự tạo cũng bị gỡ các quyền trên — cấp lại ở Vai trò & quyền nếu cần |
@@ -307,9 +307,33 @@ Thao tác này **không đảo ngược được** (`migrate:rollback` sẽ báo
 | Đề nghị chi | Đã duyệt | Đã thanh toán |
 | Yêu cầu mua hàng | Đã duyệt, chưa lập đơn | — |
 | Đơn mua hàng | Đã đặt hàng | Đã nhận hàng |
-| Chấm công | — | Ngay khi ghi (giờ × đơn giá giờ của người đó tại thời điểm ghi) |
+| Công của nhân sự | Ngay khi được phân công | Ngay khi được phân công (số buổi × đơn giá buổi của người đó) |
 
 **Công việc là tuỳ chọn trên chứng từ.** Đề nghị chi, yêu cầu mua hàng, đơn mua hàng và chấm công có ô **Công việc**; để trống thì đó là *chi phí chung* của công ty. Quy trình duyệt, thanh toán, nhận hàng giữ nguyên. Chi phí chung vẫn nằm trong **chi phí / lợi nhuận theo tháng** của công ty và trong Báo cáo chi phí (nhóm "Chi phí chung"), nhưng không tính vào công việc hay hợp đồng nào. Các danh sách có bộ lọc **Chi phí chung (không gắn công việc)**. Công việc đã huỷ không nhận thêm chứng từ.
+
+### Mọi chi phí của một công việc trên một danh sách
+
+- **Tab "Chi phí" của công việc** liệt kê tất cả chi phí liên quan tới công việc đó: công của nhân sự (ai, mấy buổi × đơn giá), thuê thiết bị / nhà cung cấp (yêu cầu và đơn mua hàng), đi lại và các đề nghị chi khác — gom theo **nhóm chi phí** (Nhân sự, Thiết bị, Nhà cung cấp, Đi lại, Sản xuất…), có tổng từng nhóm. Gồm cả chi phí của các công việc con. Dòng "Tổng" là chi phí đã cam kết, "Trong đó thực tế" là phần đã chi — khớp với hai số ở phần *Tiền & ngân sách*. Lọc theo nhóm, nguồn, tình trạng, ngày; xuất CSV / Excel; bấm một dòng để mở chứng từ gốc.
+- Tab **Đề nghị chi** (tên cũ: Chi phí) vẫn liệt kê các đề nghị chi của công việc ở mọi trạng thái, kể cả nháp và đang duyệt.
+- **Vận hành → Chi phí theo công việc** là cùng danh sách đó cho mọi công việc, gom theo công việc (khoản không gắn công việc nằm ở "Chi phí chung"); cũng mở được từ nút *Chi phí theo công việc* ở màn hình Chi phí.
+- Đây là số liệu nội bộ: chỉ người có quyền "Chi phí nội bộ & giá vốn" mới thấy tab và trang này; người không xem được mọi công việc chỉ thấy chi phí của công việc mình được xem.
+
+### Chấm công theo buổi (công) — tự tính theo phân công
+
+Đơn vị chấm công là **buổi (công)**, không phải giờ. Mỗi người có **đơn giá / buổi** (Hệ thống → Người dùng).
+
+- **Không phải chấm công tay.** Phân công một người vào công việc (người phụ trách hoặc ê-kíp) là người đó tự có một dòng công cho từng ngày của công việc, nên chi phí nhân sự — và chi phí của công việc, của hợp đồng — có ngay.
+- **Số buổi mỗi ngày**: việc có giờ = thời lượng ÷ 4 giờ, làm tròn, ít nhất 1 buổi (08:00–12:00 là 1 buổi, 08:00–17:00 là 2 buổi, 07:00–19:00 là 3 buổi); việc cả ngày = 2 buổi. Hai con số này sửa ở **Hệ thống → Cấu hình → Chấm công theo buổi (công)**.
+- **Công đi theo công việc**: đổi người, ngày, giờ thì công đổi theo; huỷ hoặc xoá công việc thì công mất; mở lại thì có lại.
+- **Không tự tính** cho: công việc chưa có ngày bắt đầu, công việc đã huỷ, và *việc dài ngày* (cả ngày, kéo dài hơn 3 ngày — người làm vẫn nhận việc khác trong lúc đó). Với các việc này, nhập công ở tab **Chấm công** của công việc.
+- **Chỉnh tay** ở tab **Chấm công** của công việc (bảng gom theo từng người, có tổng buổi và tổng tiền): sửa số buổi, hoặc nhập **đơn giá riêng** cho việc trả theo giá khác; nhập **0 buổi** nếu người đó không tính công ngày ấy; **Thêm công** cho người ngoài ê-kíp. Dòng đã chỉnh tay (nhãn *Nhập tay*) không bao giờ bị hệ thống ghi đè; nút **Tính lại theo phân công** chỉ sinh lại các dòng *Tự động*.
+- **Đơn giá** được chụp lại lúc phân công. Đổi đơn giá của một người chỉ áp dụng cho công tự tính từ hôm nay trở đi; công của những ngày đã qua giữ nguyên.
+- **Quyền**: nhân viên thấy bảng công của chính mình (số buổi, không có đơn giá và tiền) và tự chấm thêm được; dòng tự tính chỉ người có quyền *Chấm công — Xem tất cả* sửa. Đơn giá và chi phí chỉ hiện với người có quyền "Chi phí nội bộ & giá vốn".
+- Công không gắn công việc (nhập ở mục **Chấm công**) là chi phí chung.
+- **Tổng hợp theo tháng** ở mục **Chấm công**: bảng mở ra ở tháng hiện tại và gom theo nhân viên (tổng buổi, tổng tiền từng người). Bộ lọc: **Nhân viên**, **Tháng**, khoảng ngày, **Công việc**, nguồn (tự động / nhập tay); gom được theo nhân viên, công việc hoặc ngày.
+- **Xuất bảng công (Excel)**: một file .xlsx theo đúng bộ lọc đang chọn, gồm ba trang — *Theo nhân viên* (từng người, từng công việc: số ngày, số buổi, đơn giá, thành tiền, có dòng cộng), *Theo công việc* (từng công việc, từng người) và *Chi tiết* (từng dòng công). Cần quyền *Chấm công — Xuất dữ liệu* (mặc định Giám đốc, Quản lý công việc, Kế toán); cột tiền chỉ có khi người xuất được xem chi phí nội bộ.
+
+Nâng cấp từ bản chấm công theo giờ: số liệu được quy đổi 4 giờ = 1 buổi (số buổi = số giờ ÷ 4, đơn giá buổi = đơn giá giờ × 4), chi phí đã ghi nhận giữ nguyên; công việc đã phân công từ trước được sinh công (người / ngày đã chấm rồi thì giữ dòng cũ).
 
 - **Rule 6 / Rule 7**: chi phí thực tế ≥ 80% ngân sách → *Cảnh báo*; > ngân sách → *Vượt ngân sách* (báo cho người vừa xem được mọi công việc vừa xem được chi phí nội bộ — mặc định Giám đốc và Quản lý công việc). Tính trên ngân sách của từng công việc. Ngưỡng 80% sửa ở Hệ thống → Cấu hình.
 - **Đề nghị chi (Rule 9)**: Nháp → các bước duyệt → Đã duyệt → Đã thanh toán → Hoàn tất. **Rule 2**: chỉ thanh toán được khoản đã duyệt xong.
@@ -342,7 +366,7 @@ Thao tác này **không đảo ngược được** (`migrate:rollback` sẽ báo
 | | |
 |---|---|
 | Doanh thu tháng | Σ giá trị trước thuế của hóa đơn **đã phát hành** có ngày hóa đơn trong tháng (không tính nháp, đã huỷ) |
-| Chi phí tháng | Σ chi phí thực tế phát sinh trong tháng: đề nghị chi đã thanh toán (theo ngày chi), đơn mua hàng đã nhận (theo ngày nhận), giờ công (theo ngày làm) |
+| Chi phí tháng | Σ chi phí thực tế phát sinh trong tháng: đề nghị chi đã thanh toán (theo ngày chi), đơn mua hàng đã nhận (theo ngày nhận), công của nhân sự (theo ngày làm) |
 | Lợi nhuận | Doanh thu − Chi phí |
 | Biên lợi nhuận | Lợi nhuận ÷ Doanh thu × 100 |
 
@@ -385,7 +409,7 @@ Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai là
 
 - Công việc **có ngày bắt đầu** tự hiện trên lịch, từ ngày bắt đầu tới hạn hoàn thành (không có hạn: một ngày). Công việc chưa có ngày bắt đầu, hoặc kéo dài quá 2 tháng, không lên lịch.
 - Phần **Lịch làm việc** trong form công việc quyết định lịch trông thế nào: loại lịch, cả ngày hay từ giờ – đến giờ, ê-kíp (người phụ trách luôn có trong ê-kíp, thêm được cộng tác viên ngoài), địa điểm, thiết bị, khách hàng (việc gắn hợp đồng / báo giá thì theo khách hàng của hợp đồng / báo giá), "lịch dự kiến (chưa chốt)".
-- Sửa công việc → lịch đổi theo ngay. Công việc *Hoàn thành* → lịch *Đã xong*; *Đã huỷ* → *Đã huỷ*; còn lại là *Đã chốt* (hoặc *Dự kiến*). Bỏ ngày bắt đầu hoặc xoá công việc → lịch mất (lịch đã ghi giờ công thì giữ lại để tra cứu).
+- Sửa công việc → lịch đổi theo ngay. Công việc *Hoàn thành* → lịch *Đã xong*; *Đã huỷ* → *Đã huỷ*; còn lại là *Đã chốt* (hoặc *Dự kiến*). Bỏ ngày bắt đầu hoặc xoá công việc → lịch mất (lịch đã được "ghi giờ công" ở bản trước thì giữ lại để tra cứu).
 - Bấm một lịch để xem chi tiết; nút **Mở công việc** đưa tới trang công việc để sửa lịch, xem chi phí và ngân sách.
 - **Việc dài ngày** — công việc cả ngày kéo dài hơn 3 ngày, ví dụ hậu kỳ hai tuần — hiện gọn thành một dải ở đầu mỗi ngày (quá 3 việc thì gom lại, bấm để mở) và **không tính là trùng lịch**, vì người làm việc dài ngày vẫn nhận được buổi quay khác. Chuyến đi quay cả ngày tới 3 ngày, hoặc việc có nhập giờ, vẫn giữ chỗ như thường.
 - Lịch nghỉ là ngoại lệ duy nhất nhập ở trang Lịch (nút **Đăng ký nghỉ**).
@@ -404,15 +428,14 @@ Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai là
 | Đăng ký nghỉ hộ người khác, sửa / xoá lịch nghỉ của người khác | Quyền `schedules.create` / `update` / `delete` — mặc định Giám đốc và Quản lý công việc |
 | Sửa danh mục loại lịch (Hệ thống → Loại lịch) | Quyền `schedule_types.*` — mặc định Giám đốc và Quản lý công việc |
 | Bật / đổi / tắt đường dẫn chỉ-xem | Quyền `schedules.update` |
-| Ghi giờ công từ lịch | Quyền sửa lịch + quyền ghi giờ công cho người khác (`timesheets.create`, `timesheets.view_all`) |
 
 **Trùng lịch:** khi một người có hai lịch chồng thời gian, hoặc bị xếp việc vào lúc đang nghỉ, form công việc hiện cảnh báo ngay lúc nhập, thẻ lịch có viền đỏ kèm tên người bị trùng. Đây là **cảnh báo, không chặn** — đôi khi người xếp lịch cố ý. Lịch đã huỷ và việc dài ngày không tính; hai việc nối tiếp nhau (việc này kết thúc đúng lúc việc kia bắt đầu) không tính là trùng.
 
 **Thông báo:** người phụ trách và ê-kíp của công việc được báo khi công việc lên lịch, lịch đổi giờ / đổi địa điểm, bị rút khỏi ê-kíp, công việc bị huỷ, và được nhắc về lịch ngày mai (lệnh `reminders:send`, chạy 07:30 và 17:00). Người tự thao tác không nhận thông báo về chính thao tác đó; lịch đã qua (nhập bù) không tạo thông báo. Khi có người đăng ký nghỉ, những người có quyền của module Lịch làm việc được báo.
 
-**Trang công việc** (bấm vào một dòng ở mục Công việc): Ngân sách · Đã cam kết · Chi phí thực tế · Còn lại, cảnh báo *Vượt ngân sách*, và các tab Chi phí (đề nghị chi), Mua hàng, Chấm công, Lịch. Đề nghị chi, yêu cầu / đơn mua hàng có ô **Công việc**; chi phí của công việc tính theo bảng "cam kết / thực tế" ở Phase 4, số trước thuế, gồm cả chứng từ của các công việc con. Việc đã xong vẫn nhận thêm chi phí; việc đã huỷ thì không. Trang công việc cũng cho biết công việc đang nằm ở đâu trên lịch (thời gian, loại lịch, ê-kíp, địa điểm). Người trong ê-kíp thấy công việc và gắn được đề nghị chi của mình vào đó, nhưng không thấy ngân sách và chi phí.
+**Trang công việc** (bấm vào một dòng ở mục Công việc): Ngân sách · Đã cam kết · Chi phí thực tế · Còn lại, cảnh báo *Vượt ngân sách*, dòng *Trong đó: nhân sự* (tổng buổi, số người), và các tab Chi phí (đề nghị chi), Mua hàng, Chấm công (công của từng người), Lịch. Đề nghị chi, yêu cầu / đơn mua hàng có ô **Công việc**; chi phí của công việc tính theo bảng "cam kết / thực tế" ở Phase 4, số trước thuế, gồm cả chứng từ của các công việc con. Việc đã xong vẫn nhận thêm chi phí; việc đã huỷ thì không. Trang công việc cũng cho biết công việc đang nằm ở đâu trên lịch (thời gian, loại lịch, ê-kíp, địa điểm). Người trong ê-kíp thấy công việc và gắn được đề nghị chi của mình vào đó, nhưng không thấy ngân sách và chi phí.
 
-**Ghi giờ công từ lịch:** với lịch đã diễn ra (trừ lịch nghỉ), nút **Ghi giờ công** tạo cho mỗi người trong ê-kíp một dòng giờ công cho từng ngày của lịch (số giờ gợi ý = thời lượng lịch, hoặc 8 giờ/ngày với lịch cả ngày, nhiều ngày). Giờ công vào công việc của lịch và tự thành chi phí nhân sự của công việc đó. Ghi giờ công xong thì lịch và công việc cùng chuyển sang đã xong. Bấm lại không ghi trùng.
+**Công của ê-kíp:** không còn nút "Ghi giờ công" trên lịch — công của từng người tự tính theo phân công của công việc (xem *Chấm công theo buổi (công)* ở Phase 4).
 
 **Chia sẻ ra ngoài hệ thống** (nút **Chia sẻ** trên trang lịch):
 
@@ -435,14 +458,16 @@ Test chạy bằng SQLite trong bộ nhớ (cấu hình trong `phpunit.xml`), kh
 
 - Phase 3: hợp đồng, công việc và bảng Kanban, tài liệu đính kèm.
 - Công việc ↔ hợp đồng / báo giá: gắn – gỡ, công việc con theo công việc cha, chi phí và lợi nhuận của hợp đồng, tab Công việc của hợp đồng, và **quyền xem**: người không có quyền Hợp đồng / Báo giá không thấy chúng ở bất kỳ trang, form, file xuất, thông báo hay nhật ký nào, và không làm đổi được liên kết.
+- Danh sách mọi chi phí của công việc (khớp từng đồng với đã cam kết / thực tế, gồm việc con, quyền xem, trang Chi phí theo công việc), lọc công theo nhân viên – tháng và file Excel bảng công ba trang.
+- Chấm công theo buổi và công tự tính theo phân công: số buổi theo thời lượng, công đổi theo mọi thay đổi của công việc, cộng dồn lên công việc cha và hợp đồng, chỉnh tay không bị ghi đè, đổi đơn giá áp dụng từ hôm nay, quyền xem / sửa, sinh công cho dữ liệu cũ.
 - Phase 4: bộ máy duyệt theo số tiền, quy trình đề nghị chi (Rule 2, Rule 9), mua hàng, chấm công, chi phí cam kết / thực tế của công việc (cộng dồn từ công việc con) và cảnh báo ngân sách (Rule 6, Rule 7).
 - Phase 5: nghiệm thu, hóa đơn (Rule 3, Rule 4), thanh toán (Rule 5, không thu quá số còn lại), tuổi nợ.
 - Phase 6: doanh thu – chi phí – lợi nhuận theo tháng, tổng dòng chi phí khớp chi phí thực tế của công việc và hợp đồng, chia doanh thu theo dịch vụ, dashboard theo từng vai trò, "Cần xử lý" khớp danh sách, báo cáo và bộ lọc, xuất CSV / Excel và quyền xuất, nhắc việc không trùng, màn hình thông báo, audit log (giá trị trước / sau, người thực hiện, che mật khẩu, không sửa xoá được), cấu hình.
 
 - Công việc → lịch: công việc có ngày bắt đầu tự lên lịch, lịch đổi theo mọi thay đổi của công việc, giờ / nhiều ngày / quá 2 tháng, thông báo cho ê-kíp, trang Lịch không thêm – sửa – xoá được công việc, việc dài ngày không tính trùng lịch, nối dữ liệu cũ.
-- Lịch → công việc (dữ liệu nhập bằng mã) và tiền của công việc: lịch tự có công việc và ngân sách, gắn vào công việc có sẵn, sửa / huỷ / xoá lịch đồng bộ sang công việc, chi phí cam kết / thực tế của công việc từ đề nghị chi – mua hàng – giờ công, quyền xem của ê-kíp, trang công việc, tạo bù công việc cho lịch cũ.
+- Lịch → công việc (dữ liệu nhập bằng mã) và tiền của công việc: lịch tự có công việc và ngân sách, gắn vào công việc có sẵn, sửa / huỷ / xoá lịch đồng bộ sang công việc, chi phí cam kết / thực tế của công việc từ đề nghị chi – mua hàng – công của nhân sự, quyền xem của ê-kíp, trang công việc, tạo bù công việc cho lịch cũ.
 - Chi phí chung: đề nghị chi / mua hàng / chấm công không gắn công việc đi đủ quy trình, tính vào chi phí tháng mà không vào công việc hay hợp đồng nào, bộ lọc "Chi phí chung", nhóm "Chi phí chung" trong báo cáo chi phí.
-- Lịch làm việc: nhãn thời gian và lịch cả ngày / nhiều ngày, phát hiện trùng lịch và trùng ngày nghỉ, quyền xếp lịch và tự quản lịch nghỉ, thông báo cho ê-kíp, sắp lịch theo tuần / tháng / người, sửa – xoá lịch nghỉ từ trang lịch, ghi giờ công không trùng, nhắc lịch ngày mai, đường dẫn chỉ-xem (bật / đổi / tắt, 404 với mã sai), nguồn iCalendar.
+- Lịch làm việc: nhãn thời gian và lịch cả ngày / nhiều ngày, phát hiện trùng lịch và trùng ngày nghỉ, quyền xếp lịch và tự quản lịch nghỉ, thông báo cho ê-kíp, sắp lịch theo tuần / tháng / người, sửa – xoá lịch nghỉ từ trang lịch, nhắc lịch ngày mai, đường dẫn chỉ-xem (bật / đổi / tắt, 404 với mã sai), nguồn iCalendar.
 
 > Chỉ chạy test khi `APP_ENV=local`. Test dùng `RefreshDatabase`; nếu cấu hình bị cache (production), bộ test sẽ tự từ chối chạy để không xoá dữ liệu thật.
 

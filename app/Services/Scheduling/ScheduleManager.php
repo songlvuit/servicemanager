@@ -193,7 +193,7 @@ class ScheduleManager
         }
 
         if ($entry->timesheets()->exists()) {
-            throw new WorkflowException('Lịch này đã ghi giờ công nên không xoá được. Hãy chuyển sang trạng thái "Đã huỷ" nếu cần.');
+            throw new WorkflowException('Lịch này đã có công chấm từ lịch nên không xoá được. Hãy chuyển sang trạng thái "Đã huỷ" nếu cần.');
         }
 
         $task = $entry->task;

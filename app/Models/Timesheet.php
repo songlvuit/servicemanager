@@ -11,9 +11,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Ghi nhận giờ công (mục 28). Chi phí nhân sự = hours × hourly_rate, trong đó
- * hourly_rate là đơn giá của nhân viên tại thời điểm ghi nhận. Chi phí này
- * được tính vào chi phí nhóm "Nhân sự" của công việc (nếu có gắn công việc).
+ * Một dòng CÔNG của một người trong một ngày (mục 28). Đơn vị là BUỔI (công):
+ *
+ *   chi phí nhân sự = sessions (số buổi) × session_rate (đơn giá một buổi)
+ *
+ * `session_rate` là đơn giá của người đó tại thời điểm ghi (đổi đơn giá về sau
+ * không làm đổi công đã ghi), hoặc đơn giá nhập riêng cho dòng này. Chi phí
+ * được tính vào nhóm "Nhân sự" của công việc; dòng không gắn công việc là chi
+ * phí chung.
+ *
+ * `is_auto`: dòng do hệ thống tự sinh từ phân công của công việc và tự đổi
+ * theo công việc (App\Services\Tasks\TaskLabor). Người quản lý sửa tay một dòng tự sinh thì dòng
+ * đó thành dòng nhập tay — hệ thống không ghi đè nữa.
  */
 class Timesheet extends Model
 {
@@ -22,6 +31,9 @@ class Timesheet extends Model
     /** @use HasFactory<TimesheetFactory> */
     use HasFactory;
 
+    /** Số buổi tối đa của một người trong một ngày. */
+    public const MAX_SESSIONS = 6;
+
     /**
      * @var list<string>
      */
@@ -29,8 +41,16 @@ class Timesheet extends Model
         'user_id',
         'task_id',
         'work_date',
-        'hours',
+        'sessions',
+        'session_rate',
         'description',
+    ];
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_auto' => false,
     ];
 
     /**
@@ -40,9 +60,10 @@ class Timesheet extends Model
     {
         return [
             'work_date' => 'date',
-            'hours' => 'decimal:2',
-            'hourly_rate' => 'decimal:2',
+            'sessions' => 'decimal:2',
+            'session_rate' => 'decimal:2',
             'cost' => 'decimal:2',
+            'is_auto' => 'boolean',
         ];
     }
 
@@ -51,27 +72,35 @@ class Timesheet extends Model
         static::saving(function (Timesheet $timesheet): void {
             $timesheet->user_id ??= auth()->id();
 
-            // Chụp lại đơn giá khi tạo, hoặc khi đổi sang nhân viên khác.
-            if (! $timesheet->exists || $timesheet->isDirty('user_id')) {
-                $timesheet->hourly_rate = User::query()->find($timesheet->user_id)?->hourly_rate ?? 0;
+            // Không nhập đơn giá riêng: chụp lại đơn giá buổi của nhân viên khi tạo,
+            // hoặc khi đổi sang nhân viên khác.
+            $ratedByHand = $timesheet->session_rate !== null && $timesheet->isDirty('session_rate');
+
+            if ($timesheet->session_rate === null || (! $ratedByHand && (! $timesheet->exists || $timesheet->isDirty('user_id')))) {
+                $timesheet->session_rate = User::query()->find($timesheet->user_id)?->session_rate ?? 0;
             }
 
-            $timesheet->cost = Decimal::mul($timesheet->hours, $timesheet->hourly_rate);
+            $timesheet->cost = Decimal::mul($timesheet->sessions, $timesheet->session_rate);
+
+            // Dòng tự sinh bị sửa tay thì thành dòng nhập tay (TaskLabor không ghi đè nữa).
+            if ($timesheet->exists && $timesheet->is_auto && $timesheet->isDirty(['user_id', 'task_id', 'work_date', 'sessions', 'session_rate'])) {
+                $timesheet->is_auto = false;
+            }
         });
 
-        // Cộng lại số giờ thực tế của công việc liên quan (cả công việc cũ nếu vừa đổi).
-        $syncTaskHours = function (Timesheet $timesheet): void {
+        // Cộng lại số buổi thực tế của công việc liên quan (cả công việc cũ nếu vừa đổi).
+        $syncTaskSessions = function (Timesheet $timesheet): void {
             $taskIds = array_unique(array_filter([$timesheet->task_id, $timesheet->getOriginal('task_id')]));
 
             foreach ($taskIds as $taskId) {
                 Task::query()->whereKey($taskId)->update([
-                    'actual_hours' => (string) (static::query()->where('task_id', $taskId)->sum('hours') ?: 0),
+                    'actual_sessions' => (string) (static::query()->where('task_id', $taskId)->sum('sessions') ?: 0),
                 ]);
             }
         };
 
-        static::saved($syncTaskHours);
-        static::deleted($syncTaskHours);
+        static::saved($syncTaskSessions);
+        static::deleted($syncTaskSessions);
     }
 
     public function isOwnedBy(User $user): bool

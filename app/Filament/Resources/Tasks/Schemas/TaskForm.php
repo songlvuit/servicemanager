@@ -77,18 +77,18 @@ class TaskForm
             static::scheduleSection($locked),
             // Chỉ có trong form của người được xem hợp đồng / báo giá.
             ContractLink::formSection($withContract),
-            Fields::zeroWhenBlank(TextInput::make('estimated_hours'))
-                ->label('Số giờ dự kiến')
+            Fields::zeroWhenBlank(TextInput::make('estimated_sessions'))
+                ->label('Số buổi (công) dự kiến')
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(9999)
                 ->default(0)
-                ->suffix('giờ')
+                ->suffix('buổi')
                 ->disabled($locked),
             Fields::money('budget')
                 ->label('Ngân sách')
                 ->default(0)
-                ->helperText('Trước thuế. Chi phí của công việc (đề nghị chi, mua hàng, giờ công) được so với số này. Để 0 nếu không đặt ngân sách.')
+                ->helperText('Trước thuế. Chi phí của công việc (đề nghị chi, mua hàng, công của nhân sự) được so với số này. Để 0 nếu không đặt ngân sách.')
                 ->disabled($locked)
                 // Ngân sách là thông tin nội bộ, cùng quyền với chi phí.
                 ->visible(fn (): bool => Access::canSeeCosts()),

@@ -86,7 +86,7 @@ class TaskTest extends TestCase
                 'name' => 'Viết kịch bản',
                 'assignee_id' => $this->employee->getKey(),
                 'due_date' => today()->addWeek()->toDateString(),
-                'estimated_hours' => 12,
+                'estimated_sessions' => 12,
             ])
             ->assertHasNoFormErrors();
 
@@ -95,7 +95,7 @@ class TaskTest extends TestCase
         $this->assertNotNull($task);
         $this->assertSame(TaskStatus::Todo, $task->status);
         $this->assertSame($this->employee->getKey(), $task->assignee_id);
-        $this->assertSame('12.00', $task->estimated_hours);
+        $this->assertSame('12.00', $task->estimated_sessions);
         $this->assertNull($task->contract_id);
     }
 

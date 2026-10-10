@@ -8,6 +8,7 @@ use App\Enums\TaskStatus;
 use App\Services\Contracts\ContractFinancials;
 use App\Services\Scheduling\TaskSchedule;
 use App\Services\Tasks\TaskFinancials;
+use App\Services\Tasks\TaskLabor;
 use App\Support\Decimal;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * Công việc — đơn vị quản lý duy nhất của phần mềm (không còn "dự án").
  *
  * Tiền: `budget` do người quản lý nhập, còn `committed_cost` / `actual_cost`
- * chỉ do TaskFinancials ghi, tính từ đề nghị chi, mua hàng và giờ công gắn
+ * chỉ do TaskFinancials ghi, tính từ đề nghị chi, mua hàng và công của nhân sự gắn
  * vào công việc VÀ các công việc con của nó (ngân sách của việc lớn bao trùm
  * các việc con).
  *
@@ -54,7 +55,7 @@ class Task extends Model
         'status',
         'start_date',
         'due_date',
-        'estimated_hours',
+        'estimated_sessions',
         'progress',
         'budget',
         // Thông tin lịch của công việc (xem TaskSchedule).
@@ -76,8 +77,8 @@ class Task extends Model
     protected $attributes = [
         'priority' => TaskPriority::Medium->value,
         'status' => TaskStatus::Todo->value,
-        'estimated_hours' => 0,
-        'actual_hours' => 0,
+        'estimated_sessions' => 0,
+        'actual_sessions' => 0,
         'progress' => 0,
         'sort_order' => 0,
         'budget' => 0,
@@ -98,8 +99,8 @@ class Task extends Model
             'status' => TaskStatus::class,
             'start_date' => 'date',
             'due_date' => 'date',
-            'estimated_hours' => 'decimal:2',
-            'actual_hours' => 'decimal:2',
+            'estimated_sessions' => 'decimal:2',
+            'actual_sessions' => 'decimal:2',
             'progress' => 'integer',
             'sort_order' => 'integer',
             'budget' => 'decimal:2',
@@ -150,6 +151,14 @@ class Task extends Model
         // Lịch làm việc lấy từ công việc: mỗi lần công việc đổi, lịch của nó đổi theo.
         static::saved(fn (Task $task) => app(TaskSchedule::class)->sync($task));
         static::deleting(fn (Task $task) => app(TaskSchedule::class)->forget($task));
+
+        // Công của nhân sự tự sinh theo phân công: đổi người, ngày, giờ, trạng thái thì công đổi theo.
+        static::saved(function (Task $task): void {
+            if ($task->wasRecentlyCreated || $task->wasChanged(TaskLabor::RELEVANT)) {
+                app(TaskLabor::class)->sync($task);
+            }
+        });
+        static::deleting(fn (Task $task) => app(TaskLabor::class)->forget($task));
     }
 
     /**
@@ -288,14 +297,15 @@ class Task extends Model
     }
 
     /**
-     * Đã có chứng từ tiền hoặc giờ công gắn vào: không tự xoá theo lịch.
+     * Đã có chứng từ tiền hoặc công của nhân sự gắn vào: không tự xoá theo lịch.
      */
     public function hasCostDocuments(): bool
     {
         return $this->expenses()->withTrashed()->exists()
             || $this->purchaseRequests()->exists()
             || $this->purchaseOrders()->exists()
-            || $this->timesheets()->exists();
+            // Công tự sinh theo phân công không tính là "đã có chứng từ".
+            || $this->timesheets()->where('is_auto', false)->exists();
     }
 
     public function isOverdue(): bool
@@ -452,6 +462,17 @@ class Task extends Model
     public function expenses(): HasMany
     {
         return $this->hasMany(Expense::class);
+    }
+
+    /**
+     * Mọi khoản chi phí gắn thẳng vào công việc này (đề nghị chi, mua hàng,
+     * công của nhân sự). Kèm cả công việc con: TaskCostItem::forTask().
+     *
+     * @return HasMany<TaskCostItem, $this>
+     */
+    public function costItems(): HasMany
+    {
+        return $this->hasMany(TaskCostItem::class);
     }
 
     /**

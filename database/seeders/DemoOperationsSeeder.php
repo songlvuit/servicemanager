@@ -67,9 +67,9 @@ class DemoOperationsSeeder extends Seeder
             return;
         }
 
-        // Đơn giá giờ công để tính chi phí nhân sự từ chấm công.
-        $this->users['employee']->update(['hourly_rate' => 120000]);
-        $this->users['pm']->update(['hourly_rate' => 200000]);
+        // Đơn giá một buổi (công) để tính chi phí nhân sự.
+        $this->users['employee']->update(['session_rate' => 480000]);
+        $this->users['pm']->update(['session_rate' => 800000]);
 
         $this->seedSuppliers();
         $this->seedExpenses($expenses);
@@ -296,25 +296,26 @@ class DemoOperationsSeeder extends Seeder
 
     private function seedTimesheets(): void
     {
-        // [công việc, người, số ngày trước, số giờ, nội dung]
+        // Công nhập tay cho các công việc lớn (việc dài ngày không tự tính công).
+        // [công việc, người, số ngày trước, số buổi, nội dung]
         $rows = [
-            [0, 'employee', 6, 8, 'Quay tại studio — ngày 1'],
-            [0, 'employee', 5, 8, 'Quay tại studio — ngày 2'],
-            [1, 'employee', 28, 8, 'Quay bài giảng 1–3'],
-            [1, 'employee', 27, 8, 'Quay bài giảng 4–6'],
-            [1, 'employee', 26, 8, 'Quay bài giảng 7–10'],
-            [1, 'employee', 14, 8, 'Dựng thô 5 bài'],
-            [1, 'employee', 13, 8, 'Dựng thô 5 bài còn lại'],
-            [1, 'pm', 20, 6, 'Duyệt nội dung với giảng viên'],
-            [1, 'pm', 10, 4, 'Kiểm tra bản dựng'],
-            [4, 'employee', 57, 8, 'Chụp lookbook — ngày 1'],
-            [4, 'employee', 56, 8, 'Chụp lookbook — ngày 2'],
-            [4, 'employee', 50, 4, 'Chọn và xuất ảnh'],
-            [5, 'employee', 30, 8, 'Phác thảo logo'],
-            [5, 'employee', 22, 8, 'Hoàn thiện 3 phương án logo'],
+            [0, 'employee', 6, 2, 'Quay tại studio — ngày 1'],
+            [0, 'employee', 5, 2, 'Quay tại studio — ngày 2'],
+            [1, 'employee', 28, 2, 'Quay bài giảng 1–3'],
+            [1, 'employee', 27, 2, 'Quay bài giảng 4–6'],
+            [1, 'employee', 26, 2, 'Quay bài giảng 7–10'],
+            [1, 'employee', 14, 2, 'Dựng thô 5 bài'],
+            [1, 'employee', 13, 2, 'Dựng thô 5 bài còn lại'],
+            [1, 'pm', 20, 1.5, 'Duyệt nội dung với giảng viên'],
+            [1, 'pm', 10, 1, 'Kiểm tra bản dựng'],
+            [4, 'employee', 57, 2, 'Chụp lookbook — ngày 1'],
+            [4, 'employee', 56, 2, 'Chụp lookbook — ngày 2'],
+            [4, 'employee', 50, 1, 'Chọn và xuất ảnh'],
+            [5, 'employee', 30, 2, 'Phác thảo logo'],
+            [5, 'employee', 22, 2, 'Hoàn thiện 3 phương án logo'],
         ];
 
-        foreach ($rows as [$jobIndex, $user, $daysAgo, $hours, $description]) {
+        foreach ($rows as [$jobIndex, $user, $daysAgo, $sessions, $description]) {
             $job = $this->jobs[$jobIndex];
 
             Timesheet::create([
@@ -322,7 +323,7 @@ class DemoOperationsSeeder extends Seeder
                 // Gắn với một công việc con của người đó, nếu không thì chính công việc lớn.
                 'task_id' => $job->children()->where('assignee_id', $this->users[$user]->getKey())->value('id') ?? $job->getKey(),
                 'work_date' => today()->subDays($daysAgo),
-                'hours' => $hours,
+                'sessions' => $sessions,
                 'description' => $description,
             ]);
         }

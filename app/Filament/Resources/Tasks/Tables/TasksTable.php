@@ -100,13 +100,13 @@ class TasksTable
                 Columns::money('budget', 'Ngân sách')
                     ->visible(fn (): bool => Access::canSeeCosts())
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('estimated_hours')
-                    ->label('Giờ dự kiến')
+                TextColumn::make('estimated_sessions')
+                    ->label('Buổi dự kiến')
                     ->numeric(decimalPlaces: 1)
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('actual_hours')
-                    ->label('Giờ thực tế')
+                TextColumn::make('actual_sessions')
+                    ->label('Buổi thực tế')
                     ->numeric(decimalPlaces: 1)
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -144,7 +144,7 @@ class TasksTable
                     ->mutateRecordDataUsing(fn (array $data): array => TaskForm::state($data)),
                 DeleteAction::make(),
             ])
-            // Bấm vào dòng để mở trang công việc: ngân sách, chi phí, mua hàng, giờ công, lịch.
+            // Bấm vào dòng để mở trang công việc: ngân sách, chi phí, mua hàng, công của nhân sự, lịch.
             ->recordUrl(fn (Task $record): string => TaskResource::getUrl('view', ['record' => $record]))
             ->defaultSort('due_date')
             ->emptyStateHeading('Chưa có công việc nào.')

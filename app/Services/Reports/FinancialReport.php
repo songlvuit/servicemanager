@@ -14,7 +14,7 @@ use Carbon\CarbonInterface;
  *
  *   Doanh thu  = Σ giá trị trước thuế của hóa đơn đã phát hành, theo ngày hóa đơn
  *   Chi phí    = Σ chi phí thực tế (đề nghị chi đã thanh toán, đơn mua hàng đã
- *                nhận, giờ công), theo ngày phát sinh — xem model CostLine
+ *                nhận, công của nhân sự), theo ngày phát sinh — xem model CostLine
  *   Lợi nhuận  = Doanh thu − Chi phí
  *   Biên LN    = Lợi nhuận / Doanh thu × 100
  *

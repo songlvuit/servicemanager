@@ -84,7 +84,7 @@ class CostControlTest extends TestCase
     {
         $pm = $this->approver(SystemRole::ProjectManager);
         $procurement = $this->approver(SystemRole::Procurement);
-        $employee = $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 150000]);
+        $employee = $this->createUserWithRole(SystemRole::Employee, ['session_rate' => 500000]);
 
         // Yêu cầu mua hàng 6 triệu do bộ phận mua hàng lập, quản lý và kế toán duyệt → cam kết.
         $request = PurchaseRequest::factory()->create([
@@ -115,8 +115,8 @@ class CostControlTest extends TestCase
         $orders->receive($order, $procurement);
         $this->assertCosts(committed: '5500000.00', actual: '5500000.00');
 
-        // 10 giờ công × 150.000 = 1,5 triệu chi phí nhân sự.
-        Timesheet::factory()->create(['task_id' => $this->job->getKey(), 'user_id' => $employee->getKey(), 'hours' => 10]);
+        // 3 buổi (công) × 500.000 = 1,5 triệu chi phí nhân sự.
+        Timesheet::factory()->create(['task_id' => $this->job->getKey(), 'user_id' => $employee->getKey(), 'sessions' => 3]);
 
         $this->assertCosts(committed: '7000000.00', actual: '7000000.00');
 

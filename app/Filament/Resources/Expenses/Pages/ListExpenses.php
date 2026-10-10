@@ -3,11 +3,14 @@
 namespace App\Filament\Resources\Expenses\Pages;
 
 use App\Enums\ExpenseStatus;
+use App\Filament\Pages\TaskCosts;
 use App\Filament\Resources\Expenses\ExpenseResource;
 use App\Filament\Support\TableExport;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListExpenses extends ListRecords
@@ -17,6 +20,13 @@ class ListExpenses extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            // Mọi chi phí của từng công việc (công nhân sự, mua hàng, đề nghị chi) trên một danh sách.
+            Action::make('taskCosts')
+                ->label('Chi phí theo công việc')
+                ->icon(Heroicon::OutlinedCalculator)
+                ->color('gray')
+                ->visible(fn (): bool => TaskCosts::canAccess())
+                ->url(fn (): string => TaskCosts::getUrl()),
             CreateAction::make(),
             TableExport::make('expenses.export', 'de-nghi-chi', 'Danh sách đề nghị chi', fn (): array => [
                 'Mã' => 'code',

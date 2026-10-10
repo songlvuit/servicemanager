@@ -63,7 +63,7 @@ class OverheadCostTest extends TestCase
         $this->seedAccessControl();
         $this->travelTo(Carbon::parse('2026-10-15 09:00:00'));
 
-        $this->employee = $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 100000]);
+        $this->employee = $this->createUserWithRole(SystemRole::Employee, ['session_rate' => 100000]);
         $this->pm = $this->approver(SystemRole::ProjectManager);
         $this->procurement = $this->approver(SystemRole::Procurement);
         $this->accountant = $this->approver(SystemRole::Accountant);
@@ -196,7 +196,7 @@ class OverheadCostTest extends TestCase
             ->callAction('create', data: [
                 'task_id' => null,
                 'work_date' => '2026-10-14',
-                'hours' => 3,
+                'sessions' => 3,
                 'description' => 'Họp công ty',
             ])
             ->assertHasNoFormErrors();
@@ -210,9 +210,9 @@ class OverheadCostTest extends TestCase
         $this->assertTrue($this->employee->can('update', $timesheet));
         $this->get(TimesheetResource::getUrl('index'))->assertOk()->assertSee('Chi phí chung');
 
-        $onTask = Timesheet::factory()->create(['task_id' => $task->getKey(), 'user_id' => $this->employee->getKey(), 'hours' => 2]);
+        $onTask = Timesheet::factory()->create(['task_id' => $task->getKey(), 'user_id' => $this->employee->getKey(), 'sessions' => 2]);
 
-        $this->assertSame('2.00', $task->refresh()->actual_hours);
+        $this->assertSame('2.00', $task->refresh()->actual_sessions);
         $this->assertSame('200000.00', $task->actual_cost);
 
         Livewire::test(ManageTimesheets::class)

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Chứng từ gắn được vào một CÔNG VIỆC (đề nghị chi, yêu cầu / đơn mua hàng,
- * giờ công). Mỗi lần lưu hoặc xoá, chi phí của công việc được tính lại — kể
+ * công của nhân sự). Mỗi lần lưu hoặc xoá, chi phí của công việc được tính lại — kể
  * cả công việc cũ nếu chứng từ vừa được chuyển sang công việc khác. Chứng từ
  * không gắn công việc nào là chi phí chung của công ty.
  */

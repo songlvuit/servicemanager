@@ -8,7 +8,7 @@ use Filament\Support\RawJs;
 
 /**
  * Chi phí theo tháng (mục 35): chi phí thực tế của công ty — đề nghị chi đã
- * thanh toán, đơn mua hàng đã nhận và giờ công.
+ * thanh toán, đơn mua hàng đã nhận và công của nhân sự.
  */
 class ExpenseByMonth extends FinanceChart
 {
@@ -16,7 +16,7 @@ class ExpenseByMonth extends FinanceChart
 
     protected ?string $heading = 'Chi phí theo tháng';
 
-    protected ?string $description = 'Chi phí thực tế: đề nghị chi đã thanh toán, đơn mua hàng đã nhận, giờ công.';
+    protected ?string $description = 'Chi phí thực tế: đề nghị chi đã thanh toán, đơn mua hàng đã nhận, công của nhân sự.';
 
     protected ?string $emptyStateHeading = 'Chưa có chi phí';
 

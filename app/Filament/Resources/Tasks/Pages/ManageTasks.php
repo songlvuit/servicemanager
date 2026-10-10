@@ -41,8 +41,8 @@ class ManageTasks extends ManageRecords
                 'Ngày bắt đầu' => 'start_date',
                 'Hạn hoàn thành' => 'due_date',
                 'Tiến độ (%)' => 'progress',
-                'Giờ dự kiến' => 'estimated_hours',
-                'Giờ thực tế' => 'actual_hours',
+                'Buổi (công) dự kiến' => 'estimated_sessions',
+                'Buổi (công) thực tế' => 'actual_sessions',
                 ...(Access::canSeeCosts() ? [
                     'Ngân sách' => 'budget',
                     'Chi phí đã cam kết' => 'committed_cost',

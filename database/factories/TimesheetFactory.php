@@ -19,7 +19,8 @@ class TimesheetFactory extends Factory
         return [
             'user_id' => User::factory(),
             'work_date' => today(),
-            'hours' => 8,
+            // Một ngày trọn: 2 buổi (công).
+            'sessions' => 2,
         ];
     }
 }

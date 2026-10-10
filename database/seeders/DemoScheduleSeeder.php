@@ -24,10 +24,10 @@ class DemoScheduleSeeder extends Seeder
      * @var list<array{email: string, name: string, position: string, rate: int}>
      */
     private const CREW = [
-        ['email' => 'quay@example.com', 'name' => 'Ngô Văn Quay', 'position' => 'Quay phim', 'rate' => 150000],
-        ['email' => 'dung@example.com', 'name' => 'Bùi Thị Dựng', 'position' => 'Dựng phim', 'rate' => 140000],
-        ['email' => 'sang@example.com', 'name' => 'Đặng Văn Sáng', 'position' => 'Kỹ thuật ánh sáng', 'rate' => 120000],
-        ['email' => 'thanh@example.com', 'name' => 'Vũ Minh Thanh', 'position' => 'Kỹ thuật âm thanh', 'rate' => 120000],
+        ['email' => 'quay@example.com', 'name' => 'Ngô Văn Quay', 'position' => 'Quay phim', 'rate' => 600000],
+        ['email' => 'dung@example.com', 'name' => 'Bùi Thị Dựng', 'position' => 'Dựng phim', 'rate' => 560000],
+        ['email' => 'sang@example.com', 'name' => 'Đặng Văn Sáng', 'position' => 'Kỹ thuật ánh sáng', 'rate' => 480000],
+        ['email' => 'thanh@example.com', 'name' => 'Vũ Minh Thanh', 'position' => 'Kỹ thuật âm thanh', 'rate' => 480000],
     ];
 
     public function run(ScheduleManager $schedule): void
@@ -141,7 +141,7 @@ class DemoScheduleSeeder extends Seeder
                     'name' => $account['name'],
                     'position' => $account['position'],
                     'password' => DevUserSeeder::PASSWORD,
-                    'hourly_rate' => $account['rate'],
+                    'session_rate' => $account['rate'],
                     'is_active' => true,
                 ],
             );

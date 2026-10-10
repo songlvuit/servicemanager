@@ -7,6 +7,8 @@ use App\Filament\Support\Access;
 use App\Filament\Support\Columns;
 use App\Filament\Support\ContractLink;
 use App\Models\Task;
+use App\Services\Tasks\TaskLabor;
+use App\Support\Decimal;
 use App\Support\Money;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
@@ -35,7 +37,7 @@ class TaskInfolist
 
                 Section::make('Tiền & ngân sách')
                     ->icon(Heroicon::OutlinedBanknotes)
-                    ->description('Số trước thuế, tính từ đề nghị chi, mua hàng và giờ công gắn vào công việc này và các công việc con của nó.')
+                    ->description('Số trước thuế, tính từ đề nghị chi, mua hàng và công của nhân sự được phân công vào công việc này và các công việc con của nó.')
                     ->columns(['default' => 2, 'lg' => 4])
                     ->columnSpanFull()
                     ->visible(fn (): bool => Access::canSeeCosts())
@@ -50,13 +52,18 @@ class TaskInfolist
                         Columns::moneyEntry('actual_cost', 'Chi phí thực tế')
                             ->weight(FontWeight::SemiBold)
                             ->color(fn (Task $record): ?string => $record->isOverBudget() ? 'danger' : null)
-                            ->helperText('Đã thanh toán, đã nhận hàng, giờ công.'),
+                            ->helperText('Đã thanh toán, đã nhận hàng, công của nhân sự.'),
                         TextEntry::make('remaining_budget')
                             ->label('Còn lại')
                             ->state(fn (Task $record): ?string => $record->hasBudget() ? Money::format($record->remainingBudget()) : null)
                             ->placeholder('—')
                             ->weight(FontWeight::SemiBold)
                             ->color(fn (Task $record): string => $record->isOverBudget() ? 'danger' : 'success'),
+                        TextEntry::make('labor_cost')
+                            ->label('Trong đó: nhân sự')
+                            ->state(fn (Task $record): string => Money::format(static::labor($record)['cost']))
+                            ->helperText(fn (Task $record): string => static::laborSummary($record))
+                            ->columnSpan(['default' => 2, 'lg' => 2]),
                     ]),
 
                 // Chỉ có trên trang của người được xem hợp đồng / báo giá.
@@ -126,10 +133,10 @@ class TaskInfolist
                         TextEntry::make('progress')
                             ->label('Tiến độ')
                             ->suffix('%'),
-                        TextEntry::make('hours')
-                            ->label('Giờ thực tế / dự kiến')
-                            ->state(fn (Task $record): string => number_format((float) $record->actual_hours, 1, ',', '.')
-                                .' / '.number_format((float) $record->estimated_hours, 1, ',', '.').' giờ'),
+                        TextEntry::make('sessions')
+                            ->label('Buổi (công) thực tế / dự kiến')
+                            ->state(fn (Task $record): string => number_format((float) $record->actual_sessions, 1, ',', '.')
+                                .' / '.number_format((float) $record->estimated_sessions, 1, ',', '.').' buổi'),
                         TextEntry::make('parent.name')
                             ->label('Công việc cha')
                             ->visible(fn (Task $record): bool => $record->parent_id !== null),
@@ -139,5 +146,24 @@ class TaskInfolist
                             ->columnSpanFull(),
                     ]),
             ])));
+    }
+
+    /**
+     * @return array{sessions: string, cost: string, people: int}
+     */
+    private static function labor(Task $task): array
+    {
+        return app(TaskLabor::class)->summary($task);
+    }
+
+    private static function laborSummary(Task $task): string
+    {
+        $labor = static::labor($task);
+
+        if ($labor['people'] === 0) {
+            return 'Chưa có công nào. Công tự tính khi công việc có ngày bắt đầu và có người được phân công.';
+        }
+
+        return Decimal::trimZeros($labor['sessions']).' buổi (công) của '.$labor['people'].' người, tự tính theo phân công — chi tiết ở tab Chấm công.';
     }
 }

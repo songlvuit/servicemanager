@@ -24,4 +24,13 @@ return [
     'margin_good' => (float) env('JOB_MARGIN_GOOD', env('PROJECT_MARGIN_GOOD', 30)),
     'margin_warning' => (float) env('JOB_MARGIN_WARNING', env('PROJECT_MARGIN_WARNING', 20)),
     'margin_danger' => (float) env('JOB_MARGIN_DANGER', env('PROJECT_MARGIN_DANGER', 10)),
+
+    /*
+    | Chấm công theo BUỔI (công). Công của từng người trong một công việc tự
+    | tính theo lịch của công việc (xem App\Services\Tasks\TaskLabor):
+    |   - việc có giờ:  số buổi mỗi ngày = thời lượng ÷ 'session_hours', làm tròn, ít nhất 1 buổi;
+    |   - việc cả ngày: mỗi ngày 'sessions_per_day' buổi.
+    */
+    'session_hours' => (int) env('JOB_SESSION_HOURS', 4),
+    'sessions_per_day' => (int) env('JOB_SESSIONS_PER_DAY', 2),
 ];

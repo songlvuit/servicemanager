@@ -16,20 +16,21 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Tab "Chi phí" của công việc: các đề nghị chi gắn vào công việc (chỉ xem; bấm
- * vào dòng để mở và xử lý).
+ * Tab "Đề nghị chi" của công việc: các đề nghị chi gắn vào công việc ở mọi
+ * trạng thái, kể cả nháp và đang duyệt (chỉ xem; bấm vào dòng để mở và xử lý).
+ * Danh sách mọi chi phí của công việc nằm ở tab "Chi phí" (CostsRelationManager).
  */
 class ExpensesRelationManager extends RelationManager
 {
     protected static string $relationship = 'expenses';
 
-    protected static ?string $title = 'Chi phí';
+    protected static ?string $title = 'Đề nghị chi';
 
     protected static ?string $modelLabel = 'đề nghị chi';
 
     protected static ?string $pluralModelLabel = 'đề nghị chi';
 
-    protected static string|BackedEnum|null $icon = Heroicon::OutlinedBanknotes;
+    protected static string|BackedEnum|null $icon = Heroicon::OutlinedDocumentCurrencyDollar;
 
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {

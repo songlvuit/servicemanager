@@ -43,17 +43,6 @@ class ScheduleEntryPolicy
     }
 
     /**
-     * Ghi giờ công cho cả ê-kíp từ một lịch: cần quyền sửa lịch và quyền ghi
-     * giờ công cho người khác.
-     */
-    public function logTimesheets(User $user, ScheduleEntry $entry): bool
-    {
-        return $user->can('schedules.update')
-            && $user->can('timesheets.create')
-            && $user->can('timesheets.view_all');
-    }
-
-    /**
      * Lịch nghỉ do chính người này đăng ký cho riêng mình.
      */
     private function isOwnLeave(User $user, ScheduleEntry $entry): bool

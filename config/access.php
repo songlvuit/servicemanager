@@ -135,7 +135,7 @@ return [
             'sort' => 25,
             'phase' => 4,
             'menu' => true,
-            // view_all: xem và ghi giờ công của mọi người; không có thì chỉ của mình.
+            // view_all: xem và chỉnh công của mọi người (kể cả công tự tính theo phân công); không có thì chỉ của mình.
             'abilities' => ['view', 'view_all', 'create', 'update', 'delete', 'export'],
         ],
         'expenses' => [
@@ -346,7 +346,8 @@ return [
             'acceptances.view', 'acceptances.create', 'acceptances.update',
             'expenses.view', 'expenses.view_all', 'expenses.update', 'expenses.pay', 'expenses.export',
             'tasks.view', 'tasks.view_all', 'tasks.export',
-            'timesheets.view', 'timesheets.view_all',
+            // Kế toán xuất bảng công để tính lương theo buổi.
+            'timesheets.view', 'timesheets.view_all', 'timesheets.export',
             'invoices.*',
             'payments.*',
             'receivables.*',

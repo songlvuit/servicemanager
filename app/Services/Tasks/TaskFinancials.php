@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Tiền của MỘT công việc: ngân sách do người quản lý nhập, còn chi phí được
  * tính từ các chứng từ gắn vào công việc và vào các công việc con của nó (đề
- * nghị chi, mua hàng, giờ công) — xem TaskCostCollector.
+ * nghị chi, mua hàng, công của nhân sự) — xem TaskCostCollector.
  *
  *   committed_cost = Σ chi phí đã cam kết (gồm cả phần đã chi)
  *   actual_cost    = Σ chi phí thực tế

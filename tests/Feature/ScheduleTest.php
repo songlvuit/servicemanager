@@ -14,7 +14,6 @@ use App\Services\Notifications\ReminderService;
 use App\Services\Scheduling\CalendarQuery;
 use App\Services\Scheduling\ScheduleConflicts;
 use App\Services\Scheduling\ScheduleManager;
-use App\Services\Scheduling\ScheduleTimesheets;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -24,7 +23,7 @@ use Tests\TestCase;
 
 /**
  * Lịch làm việc: thời gian, trùng lịch, quyền, thông báo, cách sắp lịch theo
- * tuần / tháng / người, ghi giờ công và nhắc lịch.
+ * tuần / tháng / người và nhắc lịch.
  */
 class ScheduleTest extends TestCase
 {
@@ -47,8 +46,8 @@ class ScheduleTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-07 09:00:00'));
 
         $this->pm = $this->createUserWithRole(SystemRole::ProjectManager, ['name' => 'Dự']);
-        $this->quay = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Quay', 'hourly_rate' => 150000]);
-        $this->sang = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Sáng', 'hourly_rate' => 100000]);
+        $this->quay = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Quay', 'session_rate' => 150000]);
+        $this->sang = $this->createUserWithRole(SystemRole::Employee, ['name' => 'Sáng', 'session_rate' => 100000]);
     }
 
     public function test_default_schedule_types_exist_with_one_leave_type(): void
@@ -344,86 +343,20 @@ class ScheduleTest extends TestCase
         $this->assertSame([], $calendar->agenda($this->pm, Carbon::parse('2026-10-07'), 30));
     }
 
-    public function test_timesheets_are_logged_once_from_a_finished_schedule(): void
-    {
-        $service = app(ScheduleTimesheets::class);
-
-        // Hôm qua, 08:00 – 12:30: gợi ý 4,5 giờ.
-        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:30', [$this->quay, $this->sang], ['title' => 'Quay TVC']);
-
-        $this->assertSame('4.5', $service->suggestedHours($entry));
-        $this->assertSame(2, $service->log($entry, $this->pm, '4.5'));
-
-        // Chi phí nhân sự: 4,5 × 150.000 + 4,5 × 100.000.
-        $this->assertEquals(1125000, Timesheet::query()->sum('cost'));
-        $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
-        $this->assertNotNull($entry->timesheets_logged_at);
-        $this->assertSame('Theo lịch: Quay TVC', Timesheet::query()->first()->description);
-
-        // Ghi lại không tạo trùng; thêm người vào ê-kíp rồi ghi thì chỉ ghi cho người mới.
-        $this->assertSame(0, $service->log($entry, $this->pm, '4.5'));
-
-        $entry->crew()->attach($this->pm->getKey());
-
-        $this->assertSame(1, $service->log($entry->refresh(), $this->pm, 2));
-        $this->assertSame(3, Timesheet::query()->count());
-
-        // Lịch nhiều ngày: mỗi ngày đã qua một dòng cho mỗi người, 8 giờ gợi ý.
-        $trip = $this->makeEntry('2026-10-05 06:00', '2026-10-06 18:00', [$this->quay]);
-
-        $this->assertSame('8', $service->suggestedHours($trip));
-        $this->assertSame(2, $service->log($trip, $this->pm, 8));
-        $this->assertSame(['2026-10-05', '2026-10-06'], $trip->timesheets()->orderBy('work_date')->get()->map(fn (Timesheet $t): string => $t->work_date->toDateString())->all());
-    }
-
-    public function test_timesheets_of_a_schedule_without_a_task_are_overhead(): void
-    {
-        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay, $this->sang]);
-
-        $this->assertSame(2, app(ScheduleTimesheets::class)->log($entry, $this->pm, 4));
-
-        $timesheets = $entry->timesheets()->get();
-
-        $this->assertSame([null, null], $timesheets->pluck('task_id')->all());
-        // 4 giờ × 150.000 và 4 giờ × 100.000: vẫn là chi phí nhân sự, nhưng không vào công việc nào.
-        $this->assertEqualsCanonicalizing(['600000.00', '400000.00'], $timesheets->pluck('cost')->all());
-        $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
-    }
-
-    public function test_timesheets_cannot_be_logged_too_early_or_for_leave_or_without_permission(): void
-    {
-        $service = app(ScheduleTimesheets::class);
-
-        $future = $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->quay]);
-        $leave = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay], ['schedule_type_id' => ScheduleType::leave()->getKey()]);
-        $past = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay]);
-
-        foreach ([[$future, 'Lịch chưa diễn ra nên chưa ghi giờ công được.'], [$leave, 'Lịch nghỉ / bận không ghi giờ công.']] as [$entry, $message]) {
-            try {
-                $service->log($entry, $this->pm, 4);
-                $this->fail('Phải từ chối ghi giờ công.');
-            } catch (WorkflowException $exception) {
-                $this->assertSame($message, $exception->getMessage());
-            }
-        }
-
-        // Nhân viên không ghi giờ công cho người khác.
-        $this->expectException(AuthorizationException::class);
-
-        $service->log($past, $this->quay, 4);
-    }
-
-    public function test_a_schedule_with_timesheets_cannot_be_deleted(): void
+    /**
+     * Dữ liệu của bản trước: lịch đã được "ghi giờ công" (nối với dòng công qua
+     * bảng schedule_entry_timesheet) thì không xoá được, để còn tra cứu.
+     */
+    public function test_a_schedule_with_timesheets_logged_by_an_older_version_cannot_be_deleted(): void
     {
         $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay]);
-
-        app(ScheduleTimesheets::class)->log($entry, $this->pm, 4);
+        $entry->timesheets()->attach(Timesheet::factory()->create(['user_id' => $this->quay->getKey(), 'work_date' => '2026-10-06', 'sessions' => 1])->getKey());
 
         try {
             app(ScheduleManager::class)->delete($entry, $this->pm);
-            $this->fail('Lịch đã ghi giờ công không được xoá.');
+            $this->fail('Lịch đã có công chấm từ lịch không được xoá.');
         } catch (WorkflowException $exception) {
-            $this->assertStringContainsString('đã ghi giờ công', $exception->getMessage());
+            $this->assertStringContainsString('đã có công chấm từ lịch', $exception->getMessage());
         }
 
         $this->assertModelExists($entry);

@@ -86,10 +86,10 @@ class FinancialReportTest extends TestCase
         $pending->items()->create(['description' => 'Đèn', 'quantity' => 1, 'unit_price' => 50000000, 'tax_rate' => 10]);
         $orders->order($orders->recalculate($pending), $this->approver(SystemRole::SuperAdmin));
 
-        // Giờ công: 8 giờ × 100.000.
+        // Công: 2 buổi × 400.000.
         Timesheet::factory()->create([
             'task_id' => $job->getKey(),
-            'user_id' => $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 100000])->getKey(),
+            'user_id' => $this->createUserWithRole(SystemRole::Employee, ['session_rate' => 400000])->getKey(),
             'work_date' => '2026-10-07',
         ]);
 
@@ -118,8 +118,9 @@ class FinancialReportTest extends TestCase
 
         Timesheet::factory()->create([
             'task_id' => $second->getKey(),
-            'user_id' => $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 150000])->getKey(),
-            'hours' => 6,
+            // 3 buổi × 300.000.
+            'user_id' => $this->createUserWithRole(SystemRole::Employee, ['session_rate' => 300000])->getKey(),
+            'sessions' => 3,
         ]);
 
         foreach ([$first, $second] as $job) {
