@@ -32,11 +32,15 @@ class TimesheetsTable
         ];
 
         if ($withProject) {
-            array_unshift($filters, SelectFilter::make('project_id')
-                ->label('Dự án')
-                ->relationship('project', 'name')
-                ->searchable()
-                ->preload());
+            array_unshift(
+                $filters,
+                SelectFilter::make('project_id')
+                    ->label('Dự án')
+                    ->relationship('project', 'name')
+                    ->searchable()
+                    ->preload(),
+                Filters::withoutProject(),
+            );
         }
 
         return $table
@@ -50,6 +54,8 @@ class TimesheetsTable
                     ->searchable(),
                 TextColumn::make('project.name')
                     ->label('Dự án')
+                    // Không dùng placeholder: dòng không gắn dự án vẫn cần hiện tên công việc bên dưới.
+                    ->getStateUsing(fn (Timesheet $record): string => $record->project?->name ?? 'Không gắn dự án')
                     ->description(fn (Timesheet $record): ?string => $record->task?->name)
                     ->wrap()
                     ->visible($withProject),

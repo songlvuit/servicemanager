@@ -30,7 +30,7 @@
     /* Lưới tuần: 7 ngày, các hàng (đầu ngày, ghi chú, sáng, chiều) thẳng hàng nhau nhờ subgrid */
     .sm-week-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: .75rem; background: var(--card); }
     .sm-week { display: grid; grid-template-columns: repeat(7, minmax(9.25rem, 1fr)); grid-template-rows: auto auto auto 1fr; min-width: 66rem; }
-    .sm-day { display: grid; grid-template-rows: subgrid; grid-row: span 4; border-left: 1px solid var(--line); min-width: 0; }
+    .sm-day { display: grid; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); grid-row: span 4; border-left: 1px solid var(--line); min-width: 0; }
     .sm-day:first-child { border-left: 0; }
     .sm-day.is-weekend { background: color-mix(in oklab, var(--gray-500) 4%, transparent); }
     .sm-day-head { display: flex; align-items: center; justify-content: space-between; gap: .25rem; padding: .5rem .625rem; border-bottom: 1px solid var(--line); }
@@ -39,10 +39,11 @@
     .sm-day.is-today .sm-day-head { background: color-mix(in oklab, var(--primary-500) 12%, transparent); }
     .sm-day.is-today .sm-day-name { color: var(--primary-600); }
     .dark .sm-day.is-today .sm-day-name { color: var(--primary-400); }
-    .sm-day-add { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: .375rem; color: var(--ink-3); }
-    .sm-day-add:hover { background: var(--soft); color: var(--primary-600); }
-    .sm-day-add svg { width: 1rem; height: 1rem; }
-    .sm-day-meta { display: flex; flex-direction: column; gap: .25rem; padding: .375rem .5rem 0; min-height: .375rem; }
+    .sm-day-meta { display: flex; flex-direction: column; gap: .25rem; padding: .375rem .5rem 0; min-height: .375rem; min-width: 0; }
+    .sm-more { min-width: 0; }
+    .sm-more summary { cursor: pointer; font-size: .6875rem; line-height: 1.4; color: var(--ink-2); padding: 0 .125rem; }
+    .sm-more summary:hover { color: var(--primary-600); }
+    .sm-more[open] { display: flex; flex-direction: column; gap: .25rem; }
     .sm-band { display: flex; flex-direction: column; gap: .375rem; padding: .375rem .5rem .625rem; min-height: 5.5rem; }
     .sm-band + .sm-band { border-top: 1px dashed var(--line); }
     .sm-band-name { display: flex; align-items: center; justify-content: space-between; font-size: .6875rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
@@ -116,9 +117,6 @@
     .sm-people .sm-chip-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .sm-people .sm-chip svg { margin-top: .125rem; }
     .sm-cell { display: flex; flex-direction: column; gap: .1875rem; min-height: 2.75rem; }
-    .sm-cell-add { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 2.5rem; border-radius: .375rem; color: transparent; }
-    .sm-cell-add:hover, .sm-cell-add:focus-visible { background: var(--soft); color: var(--ink-3); }
-    .sm-cell-add svg { width: 1rem; height: 1rem; }
     .sm-cell-free { color: var(--ink-3); opacity: .5; font-size: .75rem; padding: .25rem; }
 
     /* Lịch của tôi */

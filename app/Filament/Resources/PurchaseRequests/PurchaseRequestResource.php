@@ -14,6 +14,8 @@ use App\Filament\Resources\PurchaseRequests\Pages\ViewPurchaseRequest;
 use App\Filament\Support\ApprovalTimeline;
 use App\Filament\Support\Columns;
 use App\Filament\Support\Fields;
+use App\Filament\Support\Filters;
+use App\Filament\Support\TaskField;
 use App\Filament\Support\VietnameseLabels;
 use App\Models\PurchaseRequest;
 use BackedEnum;
@@ -27,6 +29,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
@@ -75,9 +78,13 @@ class PurchaseRequestResource extends Resource
                         Select::make('project_id')
                             ->label('Dự án')
                             ->options(fn (): array => BudgetItemForm::projectOptions())
-                            ->default(fn (): ?int => request()->integer('project') ?: null)
+                            ->default(fn (): ?int => (request()->integer('project') ?: null) ?? TaskField::requested()?->project_id)
                             ->searchable()
-                            ->required(),
+                            ->placeholder('Không gắn dự án')
+                            ->helperText('Bỏ trống nếu mua cho công ty dùng chung, không thuộc dự án nào.')
+                            ->live()
+                            ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null)),
+                        TaskField::select(),
                         Select::make('category')
                             ->label('Nhóm chi phí')
                             ->options(BudgetCategory::class)
@@ -132,9 +139,11 @@ class PurchaseRequestResource extends Resource
                             ->label('Người yêu cầu'),
                         TextEntry::make('project.name')
                             ->label('Dự án')
+                            ->placeholder('Không gắn dự án')
                             ->url(fn (PurchaseRequest $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
                                 ? ProjectResource::getUrl('view', ['record' => $record->project])
                                 : null),
+                        TaskField::entry(),
                         TextEntry::make('category')
                             ->label('Nhóm chi phí')
                             ->badge(),
@@ -167,7 +176,7 @@ class PurchaseRequestResource extends Resource
                 Columns::code(label: 'Mã'),
                 TextColumn::make('description')
                     ->label('Nội dung cần mua')
-                    ->description(fn (PurchaseRequest $record): ?string => $record->project?->name)
+                    ->description(fn (PurchaseRequest $record): ?string => implode(' · ', array_filter([$record->project?->name, $record->task?->name])) ?: null)
                     ->limit(70)
                     ->wrap()
                     ->searchable(),
@@ -194,6 +203,7 @@ class PurchaseRequestResource extends Resource
                     ->relationship('project', 'name')
                     ->searchable()
                     ->preload(),
+                Filters::withoutProject(),
             ])
             ->recordActions([
                 ViewAction::make(),
@@ -221,7 +231,7 @@ class PurchaseRequestResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['project', 'requester']);
+        return parent::getEloquentQuery()->with(['project', 'task', 'requester']);
     }
 
     /**

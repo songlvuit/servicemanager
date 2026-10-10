@@ -24,7 +24,9 @@ use Filament\Schemas\Components\Utilities\Set;
 use Throwable;
 
 /**
- * Form tạo / sửa lịch làm việc, dùng cho trang Lịch và tab Lịch của dự án.
+ * Form của một lịch. Trên giao diện nay chỉ còn dùng để sửa LỊCH NGHỈ (lịch
+ * công việc đi theo công việc — xem TaskForm, TaskSchedule); các hàm ghép /
+ * tách ngày giờ và kiểm tra trùng lịch vẫn dùng chung cho form công việc.
  *
  * Form nhập ngày và giờ riêng (start_date, end_date, start_time, end_time);
  * toAttributes() ghép lại thành starts_at / ends_at để lưu, fromEntry() tách
@@ -131,7 +133,7 @@ class ScheduleForm
                         $set('customer_id', Project::query()->withTrashed()->find($state)?->customer_id);
                     }
                 })
-                ->helperText('Gắn dự án để sau này ghi giờ công và tính chi phí cho đúng dự án.')
+                ->helperText('Bỏ trống nếu là việc độc lập. Gắn dự án thì giờ công và chi phí của lịch tính vào dự án đó.')
                 ->visible($withProject)
                 ->disabled($restricted)
                 ->hidden(fn (Get $get): bool => static::isLeaveType($get('schedule_type_id'))),
@@ -337,7 +339,7 @@ class ScheduleForm
 
         $conflicts = app(ScheduleConflicts::class);
 
-        return $conflicts->describe($conflicts->find($crew, $attributes['starts_at'], $attributes['ends_at'], $entryId));
+        return $conflicts->describe($conflicts->find($crew, $attributes['starts_at'], $attributes['ends_at'], $entryId, $attributes['is_all_day']));
     }
 
     private static function time(mixed $value, string $default): string

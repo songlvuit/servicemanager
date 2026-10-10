@@ -61,7 +61,7 @@
             </nav>
         </header>
 
-        @include('filament.pages.calendar.week', ['data' => $week, 'clickable' => false, 'canCreate' => false])
+        @include('filament.pages.calendar.week', ['data' => $week, 'clickable' => false])
 
         <div class="sm-legend" aria-label="Chú giải">
             @foreach ($types as $scheduleType)

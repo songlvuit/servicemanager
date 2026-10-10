@@ -39,7 +39,15 @@ class DemoScheduleSeeder extends Seeder
             return;
         }
 
-        if (ScheduleEntry::query()->exists()) {
+        // Công việc mẫu của dự án tự có lịch, nên chỉ xét lịch do chính seeder này tạo:
+        // lịch nghỉ và lịch nhập thẳng (công việc của nó mang cờ from_schedule).
+        $seeded = ScheduleEntry::query()
+            ->where(fn ($query) => $query
+                ->whereNull('task_id')
+                ->orWhereHas('task', fn ($query) => $query->where('from_schedule', true)))
+            ->exists();
+
+        if ($seeded) {
             $this->command?->info('Bỏ qua DemoScheduleSeeder: đã có dữ liệu lịch.');
 
             return;

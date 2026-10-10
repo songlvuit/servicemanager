@@ -27,7 +27,7 @@ class ExpensesTable
                 Columns::code(label: 'Mã'),
                 TextColumn::make('description')
                     ->label('Nội dung chi')
-                    ->description(fn (Expense $record): ?string => $record->project?->name)
+                    ->description(fn (Expense $record): ?string => implode(' · ', array_filter([$record->project?->name, $record->task?->name])) ?: null)
                     ->wrap()
                     ->searchable(),
                 TextColumn::make('employee.name')
@@ -60,6 +60,7 @@ class ExpensesTable
                     ->relationship('project', 'name')
                     ->searchable()
                     ->preload(),
+                Filters::withoutProject(),
                 SelectFilter::make('vendor_id')
                     ->label('Nhà cung cấp')
                     ->options(fn (): array => ExpenseForm::supplierOptions())

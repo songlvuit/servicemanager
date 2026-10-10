@@ -34,6 +34,7 @@ class AttributeLabels
         'quotation_id' => 'Báo giá',
         'opportunity_id' => 'Cơ hội',
         'project_id' => 'Dự án',
+        'task_id' => 'Công việc',
         'supplier_id' => 'Nhà cung cấp',
         'vendor_id' => 'Nhà cung cấp',
         'project_manager_id' => 'Quản lý dự án',

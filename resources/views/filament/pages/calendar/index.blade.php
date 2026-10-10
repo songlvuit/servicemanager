@@ -69,13 +69,13 @@
                 @include('filament.pages.calendar.month', ['data' => $data])
                 @break
             @case('people')
-                @include('filament.pages.calendar.people', ['data' => $data, 'canCreate' => $canCreate])
+                @include('filament.pages.calendar.people', ['data' => $data])
                 @break
             @case('mine')
                 @include('filament.pages.calendar.mine', ['data' => $data])
                 @break
             @default
-                @include('filament.pages.calendar.week', ['data' => $data, 'clickable' => true, 'canCreate' => $canCreate])
+                @include('filament.pages.calendar.week', ['data' => $data, 'clickable' => true])
         @endswitch
 
         <div class="sm-legend" aria-label="Chú giải">

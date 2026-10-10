@@ -269,7 +269,7 @@ Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân c
 - **Rule 1**: chỉ tạo được dự án từ hợp đồng **Đang hiệu lực**.
 - **Dự án**: Lập kế hoạch → Đang thực hiện ⇄ Tạm dừng → Hoàn thành (hoặc Đã huỷ). Người không có quyền "Xem tất cả" chỉ thấy dự án mình quản lý, là thành viên hoặc có việc được giao.
 - **Ngân sách** lập theo nhóm (Nhân sự, Thiết bị, Nhà cung cấp, Đi lại, Sản xuất, Phần mềm, Marketing, Khác). Người dùng chỉ nhập số kế hoạch; số đã cam kết / thực tế / còn lại do hệ thống tính.
-- **Công việc**: danh sách và bảng Kanban kéo-thả; tiến độ dự án là trung bình tiến độ các công việc chưa huỷ.
+- **Công việc**: danh sách và bảng Kanban kéo-thả; tiến độ dự án là trung bình tiến độ các công việc chưa huỷ. Công việc không bắt buộc thuộc dự án — xem "Dự án là tuỳ chọn" ở Phase 4.
 - **Trang dự án** là dashboard của dự án: doanh thu, ngân sách, chi phí cam kết / thực tế, lợi nhuận, biên lợi nhuận, đã thu / còn phải thu, tiến độ, bảng lãi lỗ theo nhóm chi phí.
 
 ## Nghiệp vụ Phase 4: chi phí, mua hàng, chấm công, duyệt
@@ -282,6 +282,8 @@ Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân c
 | Yêu cầu mua hàng | Đã duyệt, chưa lập đơn | — |
 | Đơn mua hàng | Đã đặt hàng | Đã nhận hàng |
 | Chấm công | — | Ngay khi ghi (giờ × đơn giá giờ của người đó tại thời điểm ghi) |
+
+**Dự án là tuỳ chọn.** Công việc, đề nghị chi, yêu cầu mua hàng, đơn mua hàng và chấm công đều tạo được mà không gắn dự án (để trống ô "Dự án"): đó là *việc độc lập* và *chi phí chung* của công ty. Quy trình duyệt, thanh toán, nhận hàng giữ nguyên. Chi phí chung vẫn nằm trong **chi phí / lợi nhuận theo tháng** của công ty và trong Báo cáo chi phí (nhóm "Chi phí chung"), nhưng không tính vào ngân sách hay lợi nhuận của dự án nào. Các danh sách có bộ lọc **Không gắn dự án**.
 
 - **Rule 6 / Rule 7**: chi phí thực tế ≥ 80% ngân sách → *Cảnh báo*; > ngân sách → *Vượt ngân sách* (báo cho quản lý dự án và Giám đốc). Ngưỡng 80% sửa ở Hệ thống → Cấu hình.
 - **Đề nghị chi (Rule 9)**: Nháp → các bước duyệt → Đã duyệt → Đã thanh toán → Hoàn tất. **Rule 2**: chỉ thanh toán được khoản đã duyệt xong.
@@ -318,7 +320,7 @@ Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân c
 | Lợi nhuận | Doanh thu − Chi phí |
 | Biên lợi nhuận | Lợi nhuận ÷ Doanh thu × 100 |
 
-Lợi nhuận **từng dự án** tính trên giá trị hợp đồng của dự án: Giá trị hợp đồng − Chi phí thực tế. Đánh giá biên lợi nhuận: trên 30% *Tốt*, 20–30% *Bình thường*, dưới 20% *Cảnh báo*, dưới 10% *Nguy hiểm* (ngưỡng sửa ở Cấu hình).
+Lợi nhuận **từng dự án** tính trên giá trị hợp đồng của dự án: Giá trị hợp đồng − Chi phí thực tế (không gồm chi phí chung không gắn dự án; phần này chỉ trừ vào lợi nhuận theo tháng của công ty). Đánh giá biên lợi nhuận: trên 30% *Tốt*, 20–30% *Bình thường*, dưới 20% *Cảnh báo*, dưới 10% *Nguy hiểm* (ngưỡng sửa ở Cấu hình).
 
 **Doanh thu theo dịch vụ**: hóa đơn không ghi từng dịch vụ, nên doanh thu của mỗi hóa đơn được chia theo tỷ trọng các hạng mục trong báo giá của hợp đồng. Hợp đồng không lập từ báo giá được xếp vào "Chưa phân loại".
 
@@ -352,7 +354,17 @@ Người không xem được số liệu tài chính (nhân viên, quản lý d�
 
 Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai làm việc gì, lúc nào, ở đâu, cho dự án nào.
 
-**Một lịch gồm:** tên, loại lịch, ngày giờ (hoặc cả ngày / nhiều ngày), ê-kíp (chọn từ người dùng, thêm được cộng tác viên ngoài), dự án (chọn thì khách hàng tự theo dự án), địa điểm, thiết bị, ghi chú và trạng thái (Dự kiến / Đã chốt / Đã xong / Đã huỷ).
+**Lịch tự lấy từ Công việc và Dự án — trang Lịch chỉ để xem.** Không có nút thêm, sửa hay xoá lịch công việc ở trang Lịch; muốn thêm hoặc đổi lịch thì tạo / sửa **công việc** (mục Công việc, tab Công việc của dự án, bảng Kanban):
+
+- Công việc **có ngày bắt đầu** tự hiện trên lịch, từ ngày bắt đầu tới hạn hoàn thành (không có hạn: một ngày). Công việc chưa có ngày bắt đầu, hoặc kéo dài quá 2 tháng, không lên lịch.
+- Phần **Lịch làm việc** trong form công việc quyết định lịch trông thế nào: loại lịch, cả ngày hay từ giờ – đến giờ, ê-kíp (người phụ trách luôn có trong ê-kíp, thêm được cộng tác viên ngoài), địa điểm, thiết bị, khách hàng (với việc độc lập; việc thuộc dự án theo khách hàng của dự án), "lịch dự kiến (chưa chốt)".
+- Sửa công việc → lịch đổi theo ngay. Công việc *Hoàn thành* → lịch *Đã xong*; *Đã huỷ* → *Đã huỷ*; còn lại là *Đã chốt* (hoặc *Dự kiến*). Bỏ ngày bắt đầu hoặc xoá công việc → lịch mất (lịch đã ghi giờ công thì giữ lại để tra cứu).
+- Bấm một lịch để xem chi tiết; nút **Mở công việc** đưa tới trang công việc để sửa lịch, xem chi phí và ngân sách.
+- Từ **dự án**, lịch có thêm mốc hạn hoàn thành của các dự án đang mở (hiện ở đầu ngày), và trang dự án có tab **Lịch** liệt kê lịch của các công việc thuộc dự án.
+- **Việc dài ngày** — công việc cả ngày kéo dài hơn 3 ngày, ví dụ hậu kỳ hai tuần — hiện gọn thành một dải ở đầu mỗi ngày (quá 3 việc thì gom lại, bấm để mở) và **không tính là trùng lịch**, vì người làm việc dài ngày vẫn nhận được buổi quay khác. Chuyến đi quay cả ngày tới 3 ngày, hoặc việc có nhập giờ, vẫn giữ chỗ như thường.
+- Lịch nghỉ là ngoại lệ duy nhất nhập ở trang Lịch (nút **Đăng ký nghỉ**).
+
+**Dữ liệu nhập bằng mã** (seeder, tích hợp gọi `ScheduleManager::save()`): lịch tạo theo cách này tự có công việc của nó và hai bên vẫn luôn khớp nhau; một lịch cũng có thể gắn thêm vào công việc có sẵn (`task_id`). Dữ liệu của bản trước được nối lại khi chạy migration: lịch cũ có công việc, công việc cũ có ngày bắt đầu có lịch.
 
 **Bốn cách xem:** *Tuần* (mỗi ngày chia Sáng / Chiều – tối, trước và sau 12:00), *Tháng*, *Theo người* (mỗi người một hàng — thấy ngay ai còn trống), *Lịch của tôi* (30 ngày tới của người đang đăng nhập). Màn hình hẹp tự xếp dọc từng ngày. Dashboard có khối "Lịch của tôi" cho 7 ngày tới, trang dự án có tab **Lịch**.
 
@@ -361,17 +373,20 @@ Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai là
 | Việc | Ai làm được |
 |---|---|
 | Xem toàn bộ lịch | Mọi người dùng (module này không có quyền "Xem") |
-| Thêm / sửa / xoá lịch | Quyền `schedules.create` / `update` / `delete` — mặc định Giám đốc và Quản lý dự án |
+| Thêm / đổi lịch công việc | Người được tạo công việc (`tasks.create`) — nhập ở form công việc. Người chỉ được cập nhật công việc của mình đổi được trạng thái, tiến độ; lịch đi theo |
 | Đăng ký nghỉ, sửa / xoá lịch nghỉ của chính mình | Mọi người dùng (nút **Đăng ký nghỉ**) |
+| Đăng ký nghỉ hộ người khác, sửa / xoá lịch nghỉ của người khác | Quyền `schedules.create` / `update` / `delete` — mặc định Giám đốc và Quản lý dự án |
 | Sửa danh mục loại lịch (Hệ thống → Loại lịch) | Quyền `schedule_types.*` — mặc định Giám đốc và Quản lý dự án |
 | Bật / đổi / tắt đường dẫn chỉ-xem | Quyền `schedules.update` |
 | Ghi giờ công từ lịch | Quyền sửa lịch + quyền ghi giờ công cho người khác (`timesheets.create`, `timesheets.view_all`) |
 
-**Trùng lịch:** khi một người có hai lịch chồng thời gian, hoặc bị xếp việc vào lúc đang nghỉ, form hiện cảnh báo ngay lúc nhập, thẻ lịch có viền đỏ kèm tên người bị trùng. Đây là **cảnh báo, không chặn** — đôi khi người xếp lịch cố ý. Lịch đã huỷ không tính; hai việc nối tiếp nhau (việc này kết thúc đúng lúc việc kia bắt đầu) không tính là trùng.
+**Trùng lịch:** khi một người có hai lịch chồng thời gian, hoặc bị xếp việc vào lúc đang nghỉ, form công việc hiện cảnh báo ngay lúc nhập, thẻ lịch có viền đỏ kèm tên người bị trùng. Đây là **cảnh báo, không chặn** — đôi khi người xếp lịch cố ý. Lịch đã huỷ và việc dài ngày không tính; hai việc nối tiếp nhau (việc này kết thúc đúng lúc việc kia bắt đầu) không tính là trùng.
 
-**Thông báo:** người trong ê-kíp được báo khi có lịch mới, lịch đổi giờ / đổi địa điểm, bị rút khỏi lịch, lịch bị huỷ, và được nhắc về lịch ngày mai (lệnh `reminders:send`, chạy 07:30 và 17:00). Người tự thao tác không nhận thông báo về chính thao tác đó; lịch đã qua (nhập bù) không tạo thông báo. Khi có người đăng ký nghỉ, những người xếp lịch được báo.
+**Thông báo:** người phụ trách và ê-kíp của công việc được báo khi công việc lên lịch, lịch đổi giờ / đổi địa điểm, bị rút khỏi ê-kíp, công việc bị huỷ, và được nhắc về lịch ngày mai (lệnh `reminders:send`, chạy 07:30 và 17:00). Người tự thao tác không nhận thông báo về chính thao tác đó; lịch đã qua (nhập bù) không tạo thông báo. Khi có người đăng ký nghỉ, những người có quyền của module Lịch làm việc được báo.
 
-**Ghi giờ công từ lịch:** với lịch đã diễn ra và có gắn dự án, nút **Ghi giờ công** tạo cho mỗi người trong ê-kíp một dòng giờ công cho từng ngày của lịch (số giờ gợi ý = thời lượng lịch, hoặc 8 giờ/ngày với lịch cả ngày, nhiều ngày). Giờ công tự thành chi phí nhân sự của dự án. Bấm lại không ghi trùng; lịch đã ghi giờ công thì không xoá được.
+**Trang công việc** (bấm vào một dòng ở mục Công việc): Ngân sách · Đã cam kết · Chi phí thực tế · Còn lại, cảnh báo *Vượt ngân sách*, và các tab Chi phí (đề nghị chi), Mua hàng, Chấm công, Lịch. Đề nghị chi, yêu cầu / đơn mua hàng có ô **Công việc**; chứng từ gắn công việc luôn thuộc dự án của công việc đó. Chi phí của công việc tính theo đúng quy tắc của dự án (bảng "cam kết / thực tế" ở Phase 4), số trước thuế. Việc đã xong vẫn nhận thêm chi phí; việc đã huỷ thì không. Trang công việc cũng cho biết công việc đang nằm ở đâu trên lịch (thời gian, loại lịch, ê-kíp, địa điểm). Người trong ê-kíp thấy công việc và gắn được đề nghị chi của mình vào đó, nhưng không thấy ngân sách và chi phí.
+
+**Ghi giờ công từ lịch:** với lịch đã diễn ra (trừ lịch nghỉ), nút **Ghi giờ công** tạo cho mỗi người trong ê-kíp một dòng giờ công cho từng ngày của lịch (số giờ gợi ý = thời lượng lịch, hoặc 8 giờ/ngày với lịch cả ngày, nhiều ngày). Giờ công vào công việc của lịch và tự thành chi phí nhân sự của dự án; lịch không gắn dự án thì thành chi phí chung. Ghi giờ công xong thì lịch và công việc cùng chuyển sang đã xong. Bấm lại không ghi trùng.
 
 **Chia sẻ ra ngoài hệ thống** (nút **Chia sẻ** trên trang lịch):
 
@@ -397,7 +412,10 @@ Test chạy bằng SQLite trong bộ nhớ (cấu hình trong `phpunit.xml`), kh
 - Phase 5: nghiệm thu, hóa đơn (Rule 3, Rule 4), thanh toán (Rule 5, không thu quá số còn lại), tuổi nợ.
 - Phase 6: doanh thu – chi phí – lợi nhuận theo tháng, tổng dòng chi phí khớp chi phí thực tế của dự án, chia doanh thu theo dịch vụ, dashboard theo từng vai trò, "Cần xử lý" khớp danh sách, báo cáo và bộ lọc, xuất CSV / Excel và quyền xuất, nhắc việc không trùng, màn hình thông báo, audit log (giá trị trước / sau, người thực hiện, che mật khẩu, không sửa xoá được), cấu hình.
 
-- Lịch làm việc: nhãn thời gian và lịch cả ngày / nhiều ngày, phát hiện trùng lịch và trùng ngày nghỉ, quyền xếp lịch và tự quản lịch nghỉ, thông báo cho ê-kíp, sắp lịch theo tuần / tháng / người, mốc dự án, tạo – sửa – xoá từ trang lịch, ghi giờ công không trùng, nhắc lịch ngày mai, đường dẫn chỉ-xem (bật / đổi / tắt, 404 với mã sai), nguồn iCalendar.
+- Công việc → lịch: công việc có ngày bắt đầu tự lên lịch, lịch đổi theo mọi thay đổi của công việc, giờ / nhiều ngày / quá 2 tháng, thông báo cho ê-kíp, trang Lịch không thêm – sửa – xoá được công việc, việc dài ngày không tính trùng lịch, nối dữ liệu cũ.
+- Lịch → công việc (dữ liệu nhập bằng mã) và tiền của công việc: lịch tự có công việc và ngân sách, gắn vào công việc có sẵn, sửa / huỷ / xoá lịch đồng bộ sang công việc, chi phí cam kết / thực tế của công việc từ đề nghị chi – mua hàng – giờ công, chuyển dự án kéo theo chứng từ, quyền xem của ê-kíp, trang công việc, tạo bù công việc cho lịch cũ.
+- Dự án là tuỳ chọn: việc độc lập, đề nghị chi / mua hàng / chấm công không gắn dự án đi đủ quy trình, tính vào chi phí tháng mà không vào dự án nào, bộ lọc "Không gắn dự án", nhóm "Chi phí chung" trong báo cáo chi phí.
+- Lịch làm việc: nhãn thời gian và lịch cả ngày / nhiều ngày, phát hiện trùng lịch và trùng ngày nghỉ, quyền xếp lịch và tự quản lịch nghỉ, thông báo cho ê-kíp, sắp lịch theo tuần / tháng / người, mốc dự án, sửa – xoá lịch nghỉ từ trang lịch, ghi giờ công không trùng, nhắc lịch ngày mai, đường dẫn chỉ-xem (bật / đổi / tắt, 404 với mã sai), nguồn iCalendar.
 
 > Chỉ chạy test khi `APP_ENV=local`. Test dùng `RefreshDatabase`; nếu cấu hình bị cache (production), bộ test sẽ tự từ chối chạy để không xoá dữ liệu thật.
 
@@ -501,4 +519,3 @@ Chuyển hệ thống sang VPS khác:
 | Đường dẫn chỉ-xem của lịch báo 404 | Đường dẫn đang tắt hoặc mã đã được đổi. Mở Lịch làm việc → Chia sẻ để lấy đường dẫn hiện hành. |
 | Lịch trên điện thoại không cập nhật ngay | Google Calendar / iPhone tự tải lại nguồn iCalendar theo lịch riêng của chúng (thường vài giờ một lần); đây là giới hạn của ứng dụng lịch. |
 | Muốn làm lại từ đầu (xoá sạch dữ liệu) | `docker compose down -v` rồi `docker compose up -d --build` |
-# servicemanager

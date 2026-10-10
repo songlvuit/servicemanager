@@ -20,11 +20,17 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Báo cáo chi phí (mục 62): từng khoản CHI PHÍ THỰC TẾ của các dự án, trước
- * thuế — đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng và giờ công.
+ * Báo cáo chi phí (mục 62): từng khoản CHI PHÍ THỰC TẾ trước thuế — đề nghị
+ * chi đã thanh toán, đơn mua hàng đã nhận hàng và giờ công. Khoản không gắn
+ * dự án được xếp vào "Chi phí chung".
  */
 class CostReport extends ReportPage
 {
+    /**
+     * Tên hiển thị cho các khoản chi không gắn dự án nào.
+     */
+    private const OVERHEAD = 'Chi phí chung';
+
     protected static ?string $slug = 'reports/costs';
 
     protected static ?string $title = 'Báo cáo chi phí';
@@ -33,7 +39,7 @@ class CostReport extends ReportPage
 
     protected static ?int $navigationSort = 42;
 
-    protected ?string $subheading = 'Chi phí thực tế của các dự án, trước thuế: đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng, giờ công.';
+    protected ?string $subheading = 'Chi phí thực tế trước thuế, gồm cả chi phí chung không gắn dự án: đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng, giờ công.';
 
     protected function getHeaderActions(): array
     {
@@ -43,7 +49,8 @@ class CostReport extends ReportPage
                 'Nguồn' => fn (CostLine $line): string => $line->sourceLabel(),
                 'Số chứng từ' => 'reference',
                 'Mã dự án' => 'project.code',
-                'Dự án' => 'project.name',
+                'Dự án' => fn (CostLine $line): string => $line->project?->name ?? self::OVERHEAD,
+                'Công việc' => 'task.name',
                 'Nhóm chi phí' => 'category',
                 'Nhà cung cấp' => 'supplier.name',
                 'Nội dung' => 'description',
@@ -55,7 +62,9 @@ class CostReport extends ReportPage
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => CostLine::query()->with(['project', 'supplier']))
+            ->query(fn (): Builder => CostLine::query()->with(['project', 'task', 'supplier']))
+            ->modelLabel('khoản chi phí')
+            ->pluralModelLabel('khoản chi phí')
             ->columns([
                 TextColumn::make('cost_date')
                     ->label('Ngày')
@@ -68,12 +77,18 @@ class CostReport extends ReportPage
                     ->searchable(['reference']),
                 TextColumn::make('project.name')
                     ->label('Dự án')
+                    ->placeholder(self::OVERHEAD)
                     ->weight(FontWeight::Medium)
                     ->description(fn (CostLine $record): ?string => $record->project?->code)
                     ->url(fn (CostLine $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
                         ? ProjectResource::getUrl('view', ['record' => $record->project])
                         : null)
                     ->wrap(),
+                TextColumn::make('task.name')
+                    ->label('Công việc')
+                    ->placeholder('—')
+                    ->wrap()
+                    ->toggleable(),
                 TextColumn::make('category')
                     ->label('Nhóm chi phí')
                     ->badge(),
@@ -98,6 +113,7 @@ class CostReport extends ReportPage
                     ->options(fn (): array => Project::query()->withTrashed()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable()
                     ->multiple(),
+                Filters::withoutProject('Chỉ chi phí chung (không gắn dự án)'),
                 SelectFilter::make('category')
                     ->label('Nhóm chi phí')
                     ->options(BudgetCategory::class)
@@ -112,7 +128,14 @@ class CostReport extends ReportPage
                     ->options(CostLine::SOURCES),
             ])
             ->groups([
-                Group::make('project.name')->label('Dự án')->collapsible(),
+                Group::make('project.name')
+                    ->label('Dự án')
+                    ->getTitleFromRecordUsing(fn (CostLine $record): string => $record->project?->name ?? self::OVERHEAD)
+                    ->collapsible(),
+                Group::make('task.name')
+                    ->label('Công việc')
+                    ->getTitleFromRecordUsing(fn (CostLine $record): string => $record->task?->name ?? 'Không gắn công việc')
+                    ->collapsible(),
                 Group::make('category')->label('Nhóm chi phí')->collapsible(),
                 Group::make('supplier.name')->label('Nhà cung cấp')->collapsible(),
             ])

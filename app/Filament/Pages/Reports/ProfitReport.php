@@ -38,7 +38,7 @@ class ProfitReport extends ReportPage
 
     protected static ?int $navigationSort = 40;
 
-    protected ?string $subheading = 'Lợi nhuận từng dự án: giá trị hợp đồng − chi phí thực tế, trước thuế.';
+    protected ?string $subheading = 'Lợi nhuận từng dự án: giá trị hợp đồng − chi phí thực tế, trước thuế. Chi phí chung không gắn dự án không nằm ở đây — xem Báo cáo chi phí.';
 
     protected function getHeaderActions(): array
     {

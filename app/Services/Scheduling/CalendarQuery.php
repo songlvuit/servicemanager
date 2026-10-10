@@ -51,7 +51,7 @@ class CalendarQuery
      * Bảy ngày của tuần chứa $date; mỗi ngày chia sáng / chiều.
      *
      * @param  array<string, mixed>  $filters
-     * @return array{from: CarbonImmutable, to: CarbonImmutable, label: string, conflicts: array<int, list<string>>, days: list<array{date: CarbonImmutable, weekday: string, isToday: bool, isWeekend: bool, morning: list<ScheduleEntry>, afternoon: list<ScheduleEntry>, leave: list<ScheduleEntry>, milestones: list<string>}>}
+     * @return array{from: CarbonImmutable, to: CarbonImmutable, label: string, conflicts: array<int, list<string>>, days: list<array{date: CarbonImmutable, weekday: string, isToday: bool, isWeekend: bool, morning: list<ScheduleEntry>, afternoon: list<ScheduleEntry>, leave: list<ScheduleEntry>, long: list<ScheduleEntry>, milestones: list<string>}>}
      */
     public function week(CarbonInterface $date, array $filters = [], ?User $viewer = null): array
     {
@@ -71,8 +71,10 @@ class CalendarQuery
                 'isToday' => $day->isToday(),
                 'isWeekend' => $day->isWeekend(),
                 'leave' => $onDay->filter(fn (ScheduleEntry $entry): bool => $entry->isLeave())->values()->all(),
-                'morning' => $onDay->filter(fn (ScheduleEntry $entry): bool => ! $entry->isLeave() && $this->band($entry, $day) === 'morning')->values()->all(),
-                'afternoon' => $onDay->filter(fn (ScheduleEntry $entry): bool => ! $entry->isLeave() && $this->band($entry, $day) === 'afternoon')->values()->all(),
+                // Việc dài ngày hiện gọn ở đầu ngày, không chiếm buổi sáng / chiều.
+                'long' => $onDay->filter(fn (ScheduleEntry $entry): bool => $entry->isBackground())->values()->all(),
+                'morning' => $onDay->filter(fn (ScheduleEntry $entry): bool => $this->inBand($entry, $day, 'morning'))->values()->all(),
+                'afternoon' => $onDay->filter(fn (ScheduleEntry $entry): bool => $this->inBand($entry, $day, 'afternoon'))->values()->all(),
                 'milestones' => $milestones[$day->toDateString()] ?? [],
             ];
         }
@@ -225,6 +227,11 @@ class CalendarQuery
             ->filter(fn (ScheduleEntry $entry): bool => $entry->starts_at->lte($end) && $entry->ends_at->gte($start))
             ->sortBy(fn (ScheduleEntry $entry): int => $entry->starts_at->lt($start) ? 0 : $entry->starts_at->hour * 60 + $entry->starts_at->minute)
             ->values();
+    }
+
+    private function inBand(ScheduleEntry $entry, CarbonInterface $day, string $band): bool
+    {
+        return ! $entry->isLeave() && ! $entry->isBackground() && $this->band($entry, $day) === $band;
     }
 
     /**

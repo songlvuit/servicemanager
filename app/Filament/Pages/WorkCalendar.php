@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Exceptions\WorkflowException;
 use App\Filament\Resources\Projects\ProjectResource;
+use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\Access;
 use App\Filament\Support\Scheduling\ScheduleForm;
 use App\Models\ScheduleEntry;
@@ -14,12 +15,14 @@ use App\Services\Scheduling\ScheduleConflicts;
 use App\Services\Scheduling\ScheduleManager;
 use App\Services\Scheduling\ScheduleTimesheets;
 use App\Support\Audit\AuditLogger;
+use App\Support\Money;
 use App\Support\PublicCalendarLink;
 use BackedEnum;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
@@ -38,8 +41,12 @@ use UnitEnum;
 
 /**
  * Lịch làm việc chung của công ty: ai làm việc gì, lúc nào, ở đâu, cho dự án
- * nào. Mọi người dùng đều xem được; xếp lịch cần quyền của module "Lịch làm
- * việc"; ai cũng tự đăng ký được lịch nghỉ của mình.
+ * nào. Mọi người dùng đều xem được.
+ *
+ * Trang này CHỈ ĐỂ XEM lịch công việc: lịch tự lấy từ Công việc (công việc có
+ * ngày bắt đầu) và mốc của Dự án, nên không có nút thêm / sửa / xoá lịch công
+ * việc — việc đó làm ở mục Công việc. Ở đây chỉ còn: đăng ký nghỉ, sửa / xoá
+ * lịch nghỉ, ghi giờ công từ lịch và chia sẻ lịch.
  *
  * Bốn cách xem: tuần (sáng / chiều), tháng, theo người, lịch của tôi.
  */
@@ -129,7 +136,7 @@ class WorkCalendar extends Page
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Lịch chung của cả công ty — mọi người đều xem được.';
+        return 'Lịch chung của cả công ty, tự lấy từ Công việc và Dự án. Muốn thêm hoặc đổi lịch, hãy tạo / sửa công việc ở mục Công việc.';
     }
 
     // --- Điều hướng ---------------------------------------------------------
@@ -220,7 +227,6 @@ class WorkCalendar extends Page
             'types' => ScheduleType::query()->active()->ordered()->get(),
             'people' => ScheduleForm::userOptions(),
             'projects' => ScheduleForm::projectOptions($this->project),
-            'canCreate' => $user?->can('create', ScheduleEntry::class) ?? false,
             'hasFilters' => filled($this->type) || filled($this->person) || filled($this->project) || $this->cancelled,
         ];
     }
@@ -243,7 +249,6 @@ class WorkCalendar extends Page
     protected function getHeaderActions(): array
     {
         return [
-            $this->createEntryAction(),
             $this->registerLeaveAction(),
             ActionGroup::make([
                 $this->subscribeAction(),
@@ -254,47 +259,6 @@ class WorkCalendar extends Page
                 ->color('gray')
                 ->button(),
         ];
-    }
-
-    /**
-     * Mở từ nút "Thêm lịch" hoặc dấu + của một ngày: mountAction('createEntry', { date, band }).
-     */
-    public function createEntryAction(): Action
-    {
-        return Action::make('createEntry')
-            ->label('Thêm lịch')
-            ->icon(Heroicon::OutlinedPlus)
-            ->modalHeading('Thêm lịch')
-            ->modalSubmitActionLabel('Lưu lịch')
-            ->modalWidth(Width::ThreeExtraLarge)
-            ->visible(fn (): bool => auth()->user()?->can('create', ScheduleEntry::class) ?? false)
-            ->fillForm(function (array $arguments): array {
-                // Không bấm vào ngày cụ thể: hôm nay nếu đang xem tuần này, nếu không thì ngày đang xem.
-                $date = $this->safeDate($arguments['date'] ?? null)
-                    ?? ($this->anchor()->isSameWeek(today()) ? today()->toDateString() : $this->anchor()->toDateString());
-                $afternoon = ($arguments['band'] ?? null) === 'afternoon';
-
-                return [
-                    'start_date' => $date,
-                    'end_date' => $date,
-                    'start_time' => $afternoon ? '13:00' : ScheduleForm::DEFAULT_START,
-                    'end_time' => $afternoon ? '17:00' : ScheduleForm::DEFAULT_END,
-                    'status' => 'confirmed',
-                    'schedule_type_id' => ScheduleType::query()->active()->where('is_leave', false)->ordered()->value('id'),
-                    'project_id' => $this->project ?: null,
-                    'crew' => filled($arguments['user'] ?? null) ? [(int) $arguments['user']] : [],
-                ];
-            })
-            ->schema(ScheduleForm::components())
-            ->action(function (array $data): void {
-                $this->guarded(function () use ($data): void {
-                    ['attributes' => $attributes, 'crew' => $crew] = ScheduleForm::toAttributes($data);
-
-                    $entry = app(ScheduleManager::class)->save(null, $attributes, $crew, auth()->user());
-
-                    $this->notifySaved($entry, 'Đã thêm lịch.');
-                });
-            });
     }
 
     /**
@@ -321,10 +285,16 @@ class WorkCalendar extends Page
                 $open = fn (string $action): \Closure => fn () => $this->replaceMountedAction($action, ['entry' => $entry->getKey()]);
 
                 return [
+                    // Lịch công việc là bản chiếu của công việc: xem và sửa ở trang công việc.
+                    Action::make('task')
+                        ->label('Mở công việc')
+                        ->icon(Heroicon::OutlinedRectangleStack)
+                        ->visible($this->taskUrl($entry) !== null)
+                        ->url($this->taskUrl($entry)),
                     Action::make('edit')
                         ->label('Sửa')
                         ->icon(Heroicon::OutlinedPencilSquare)
-                        ->visible($user->can('update', $entry))
+                        ->visible($entry->isLeave() && $user->can('update', $entry))
                         ->action($open('editEntry')),
                     Action::make('timesheets')
                         ->label('Ghi giờ công')
@@ -336,7 +306,7 @@ class WorkCalendar extends Page
                         ->label('Xoá')
                         ->icon(Heroicon::OutlinedTrash)
                         ->color('danger')
-                        ->visible($user->can('delete', $entry))
+                        ->visible($entry->isLeave() && $user->can('delete', $entry))
                         ->action($open('deleteEntry')),
                 ];
             });
@@ -345,22 +315,19 @@ class WorkCalendar extends Page
     public function editEntryAction(): Action
     {
         return Action::make('editEntry')
-            ->modalHeading('Sửa lịch')
+            ->modalHeading('Sửa lịch nghỉ')
             ->modalSubmitActionLabel('Lưu lịch')
             ->modalWidth(Width::ThreeExtraLarge)
             ->record(fn (array $arguments): ?ScheduleEntry => $this->findEntry($arguments))
             ->fillForm(fn (array $arguments): array => ($entry = $this->findEntry($arguments)) ? ScheduleForm::fromEntry($entry) : [])
+            // Chỉ còn lịch nghỉ sửa được ở đây, và chỉ đổi thời gian, ghi chú.
             ->schema(fn (array $arguments): array => ScheduleForm::components(
                 entryId: $this->findEntry($arguments)?->getKey(),
-                restricted: ! Access::can('schedules.update'),
+                restricted: true,
             ))
             ->action(function (array $data, array $arguments): void {
                 $this->guarded(function () use ($data, $arguments): void {
-                    $entry = $this->findEntry($arguments);
-
-                    if ($entry === null) {
-                        throw new WorkflowException('Lịch không còn tồn tại.');
-                    }
+                    $entry = $this->leaveEntry($arguments);
 
                     // Trường bị khoá không được gửi lên: giữ giá trị đang có.
                     ['attributes' => $attributes, 'crew' => $crew] = ScheduleForm::toAttributes([...ScheduleForm::fromEntry($entry), ...$data]);
@@ -378,15 +345,11 @@ class WorkCalendar extends Page
             ->requiresConfirmation()
             ->color('danger')
             ->modalHeading(fn (array $arguments): string => 'Xoá lịch "'.($this->findEntry($arguments)?->title ?? '').'"?')
-            ->modalDescription('Lịch sẽ bị xoá hẳn và ê-kíp được báo là lịch đã huỷ. Nếu chỉ muốn giữ lại để tra cứu, hãy sửa trạng thái thành "Đã huỷ".')
+            ->modalDescription('Lịch nghỉ sẽ bị xoá hẳn khỏi lịch chung.')
             ->modalSubmitActionLabel('Xoá lịch')
             ->action(function (array $arguments): void {
                 $this->guarded(function () use ($arguments): void {
-                    $entry = $this->findEntry($arguments);
-
-                    if ($entry !== null) {
-                        app(ScheduleManager::class)->delete($entry, auth()->user());
-                    }
+                    app(ScheduleManager::class)->delete($this->leaveEntry($arguments), auth()->user());
 
                     Notification::make()->title('Đã xoá lịch.')->success()->send();
                 });
@@ -403,7 +366,11 @@ class WorkCalendar extends Page
             ->modalDescription(function (array $arguments): string {
                 $entry = $this->findEntry($arguments);
 
-                return $entry === null ? '' : "{$entry->title} · {$entry->project?->code} · ê-kíp: ".$entry->crew->pluck('name')->implode(', ');
+                return $entry === null ? '' : implode(' · ', array_filter([
+                    $entry->title,
+                    $entry->project?->code ?? 'Không gắn dự án',
+                    'ê-kíp: '.$entry->crew->pluck('name')->implode(', '),
+                ]));
             })
             ->modalSubmitActionLabel('Ghi giờ công')
             ->modalWidth(Width::Large)
@@ -418,7 +385,7 @@ class WorkCalendar extends Page
                     ->maxValue(24)
                     ->required()
                     ->suffix('giờ')
-                    ->helperText('Mỗi người trong ê-kíp được ghi số giờ này cho từng ngày của lịch, vào dự án của lịch. Người / ngày đã ghi rồi sẽ được bỏ qua. Lịch chuyển sang "Đã xong".'),
+                    ->helperText('Mỗi người trong ê-kíp được ghi số giờ này cho từng ngày của lịch, vào dự án của lịch (nếu có). Người / ngày đã ghi rồi sẽ được bỏ qua. Lịch chuyển sang "Đã xong".'),
             ])
             ->action(function (array $data, array $arguments): void {
                 $this->guarded(function () use ($data, $arguments): void {
@@ -432,7 +399,11 @@ class WorkCalendar extends Page
 
                     Notification::make()
                         ->title($created > 0 ? "Đã ghi {$created} dòng giờ công." : 'Giờ công của lịch này đã được ghi từ trước.')
-                        ->body($created > 0 && $entry->project !== null ? 'Chi phí nhân sự đã được cộng vào dự án '.$entry->project->code.'.' : null)
+                        ->body(match (true) {
+                            $created === 0 => null,
+                            $entry->project !== null => 'Chi phí nhân sự đã được cộng vào dự án '.$entry->project->code.'.',
+                            default => 'Lịch không gắn dự án nên chi phí nhân sự được tính là chi phí chung.',
+                        })
                         ->success()
                         ->send();
                 });
@@ -449,11 +420,19 @@ class WorkCalendar extends Page
             ->icon(Heroicon::OutlinedMoon)
             ->color('gray')
             ->modalHeading('Đăng ký nghỉ')
-            ->modalDescription('Lịch nghỉ của bạn hiện trên lịch chung, để người xếp lịch biết và không xếp việc trùng.')
+            ->modalDescription('Lịch nghỉ hiện trên lịch chung, để người giao việc biết và không xếp việc trùng.')
             ->modalSubmitActionLabel('Đăng ký')
             ->modalWidth(Width::Large)
             ->fillForm(fn (): array => ['start_date' => today()->addDay()->toDateString(), 'end_date' => today()->addDay()->toDateString()])
             ->schema([
+                Select::make('user_id')
+                    ->label('Người nghỉ')
+                    ->options(fn (): array => ScheduleForm::userOptions())
+                    ->default(fn (): ?int => auth()->id())
+                    ->searchable()
+                    ->required()
+                    // Người xếp lịch đăng ký hộ được cho người khác.
+                    ->visible(fn (): bool => Access::can('schedules.create')),
                 DatePicker::make('start_date')
                     ->label('Từ ngày')
                     ->native(false)
@@ -472,8 +451,12 @@ class WorkCalendar extends Page
             ])
             ->action(function (array $data): void {
                 $this->guarded(function () use ($data): void {
+                    $person = Access::can('schedules.create') && filled($data['user_id'] ?? null)
+                        ? User::query()->where('is_active', true)->findOrFail($data['user_id'])
+                        : auth()->user();
+
                     $entry = app(ScheduleManager::class)->registerLeave(
-                        auth()->user(),
+                        $person,
                         CarbonImmutable::parse($data['start_date'])->startOfDay(),
                         CarbonImmutable::parse($data['end_date'])->endOfDay(),
                         allDay: true,
@@ -619,10 +602,40 @@ class WorkCalendar extends Page
     public function canLogTimesheets(ScheduleEntry $entry): bool
     {
         return ! $entry->isLeave()
-            && $entry->project_id !== null
             && $entry->status->occupiesTime()
             && $entry->starts_at->isPast()
             && (auth()->user()?->can('logTimesheets', $entry) ?? false);
+    }
+
+    /**
+     * Lịch nghỉ đang được sửa / xoá từ trang Lịch. Lịch công việc không sửa
+     * được ở đây: nó đi theo công việc.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    private function leaveEntry(array $arguments): ScheduleEntry
+    {
+        $entry = $this->findEntry($arguments);
+
+        if ($entry === null) {
+            throw new WorkflowException('Lịch không còn tồn tại.');
+        }
+
+        if (! $entry->isLeave()) {
+            throw new WorkflowException('Lịch này lấy từ công việc. Hãy sửa hoặc xoá công việc ở mục Công việc.');
+        }
+
+        return $entry;
+    }
+
+    /**
+     * Trang công việc của lịch (nơi quản lý chi phí và ngân sách), nếu người dùng mở được.
+     */
+    private function taskUrl(ScheduleEntry $entry): ?string
+    {
+        return $entry->task !== null && (auth()->user()?->can('view', $entry->task) ?? false)
+            ? TaskResource::getUrl('view', ['record' => $entry->task])
+            : null;
     }
 
     /**
@@ -633,7 +646,7 @@ class WorkCalendar extends Page
         $id = (int) ($arguments['entry'] ?? 0);
 
         return $id > 0
-            ? ScheduleEntry::query()->with(['type', 'crew', 'project', 'customer', 'creator'])->find($id)
+            ? ScheduleEntry::query()->with(['type', 'crew', 'project', 'customer', 'creator', 'task'])->find($id)
             : null;
     }
 
@@ -679,6 +692,16 @@ class WorkCalendar extends Page
                 ->hidden($entry->isLeave()),
             $text('customer', 'Khách hàng', $entry->customer?->name)
                 ->hidden($entry->isLeave()),
+            TextEntry::make('task')
+                ->label('Công việc')
+                ->state($entry->task?->name)
+                ->url($this->taskUrl($entry))
+                ->placeholder('Chưa có')
+                ->hidden($entry->isLeave()),
+            $text('task_money', 'Chi phí / ngân sách', $entry->task === null ? null : Money::format($entry->task->actual_cost)
+                .' / '.($entry->task->hasBudget() ? Money::format($entry->task->budget) : 'chưa đặt ngân sách'))
+                ->color($entry->task?->isOverBudget() ? 'danger' : null)
+                ->hidden($entry->isLeave() || $entry->task === null || ! Access::canSeeCosts()),
             $text('location', 'Địa điểm', $entry->location)
                 ->hidden($entry->isLeave())
                 ->columnSpanFull(),

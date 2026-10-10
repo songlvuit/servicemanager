@@ -6,6 +6,7 @@ use App\Enums\BudgetCategory;
 use App\Enums\ExpenseStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Concerns\AffectsProjectCosts;
+use App\Models\Concerns\AffectsTaskCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasApprovals;
 use App\Models\Concerns\HasAttachments;
@@ -30,6 +31,7 @@ class Expense extends Model
     public const AUDIT_NAME = 'Đề nghị chi';
 
     use AffectsProjectCosts;
+    use AffectsTaskCosts;
     use HasApprovals;
     use HasAttachments;
     use HasDocumentCode;
@@ -46,6 +48,7 @@ class Expense extends Model
      */
     protected $fillable = [
         'project_id',
+        'task_id',
         'category',
         'description',
         'amount',

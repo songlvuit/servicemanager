@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\BudgetCategory;
 use App\Enums\PurchaseRequestStatus;
 use App\Models\Concerns\AffectsProjectCosts;
+use App\Models\Concerns\AffectsTaskCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasApprovals;
 use App\Models\Concerns\HasDocumentCode;
@@ -25,6 +26,7 @@ class PurchaseRequest extends Model
     public const AUDIT_NAME = 'Yêu cầu mua hàng';
 
     use AffectsProjectCosts;
+    use AffectsTaskCosts;
     use HasApprovals;
     use HasDocumentCode;
 
@@ -38,6 +40,7 @@ class PurchaseRequest extends Model
      */
     protected $fillable = [
         'project_id',
+        'task_id',
         'supplier_id',
         'category',
         'description',

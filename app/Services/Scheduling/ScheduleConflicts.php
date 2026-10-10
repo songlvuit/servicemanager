@@ -10,7 +10,8 @@ use Illuminate\Support\Collection;
 
 /**
  * Phát hiện trùng lịch: một người được xếp vào hai lịch có thời gian chồng
- * nhau, hoặc được xếp việc vào lúc đang nghỉ. Lịch đã huỷ không giữ chỗ.
+ * nhau, hoặc được xếp việc vào lúc đang nghỉ. Lịch đã huỷ không giữ chỗ, và
+ * "việc dài ngày" (ScheduleEntry::isBackground()) cũng không.
  *
  * Trùng lịch chỉ là CẢNH BÁO — hệ thống vẫn cho lưu, vì đôi khi người xếp
  * lịch cố ý (ví dụ một người chạy hai việc gần nhau).
@@ -24,11 +25,16 @@ class ScheduleConflicts
      * @param  list<int|string>  $userIds
      * @return list<array{user: User, entry: ScheduleEntry}>
      */
-    public function find(array $userIds, CarbonInterface $start, CarbonInterface $end, ?int $ignoreEntryId = null): array
+    public function find(array $userIds, CarbonInterface $start, CarbonInterface $end, ?int $ignoreEntryId = null, bool $allDay = false): array
     {
         $userIds = array_values(array_unique(array_map('intval', $userIds)));
 
         if ($userIds === [] || $end->lte($start)) {
+            return [];
+        }
+
+        // Việc dài ngày không giữ chỗ: chính nó không bị coi là trùng với lịch khác.
+        if ($allDay && ScheduleEntry::isLongSpan($start, $end, true)) {
             return [];
         }
 
@@ -45,6 +51,11 @@ class ScheduleConflicts
         $conflicts = [];
 
         foreach ($entries as $entry) {
+            // …và lịch khác cũng không bị coi là trùng với việc dài ngày.
+            if ($entry->isBackground()) {
+                continue;
+            }
+
             foreach ($entry->crew as $user) {
                 $conflicts[] = ['user' => $user, 'entry' => $entry];
             }
@@ -62,7 +73,7 @@ class ScheduleConflicts
             return [];
         }
 
-        return $this->find($entry->crew()->pluck('users.id')->all(), $entry->starts_at, $entry->ends_at, $entry->getKey());
+        return $this->find($entry->crew()->pluck('users.id')->all(), $entry->starts_at, $entry->ends_at, $entry->getKey(), ! $entry->isLeave() && $entry->is_all_day);
     }
 
     /**
@@ -98,7 +109,7 @@ class ScheduleConflicts
         $byUser = [];
 
         foreach ($entries as $entry) {
-            if (! $entry->status->occupiesTime()) {
+            if (! $entry->status->occupiesTime() || $entry->isBackground()) {
                 continue;
             }
 

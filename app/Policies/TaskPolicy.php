@@ -7,7 +7,7 @@ use App\Models\User;
 
 /**
  * Công việc. Người không có quyền "Xem tất cả" chỉ xem và cập nhật được công
- * việc được giao cho mình.
+ * việc được giao cho mình hoặc mình có trong ê-kíp của lịch.
  */
 class TaskPolicy
 {
@@ -43,6 +43,6 @@ class TaskPolicy
 
     private function sees(User $user, Task $task): bool
     {
-        return $user->can('tasks.view_all') || $task->assignee_id === $user->getKey();
+        return $task->isVisibleTo($user);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\BudgetCategory;
 use App\Enums\PurchaseOrderStatus;
 use App\Models\Concerns\AffectsProjectCosts;
+use App\Models\Concerns\AffectsTaskCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasDocumentCode;
 use Database\Factories\PurchaseOrderFactory;
@@ -25,6 +26,7 @@ class PurchaseOrder extends Model
     public const AUDIT_NAME = 'Đơn mua hàng';
 
     use AffectsProjectCosts;
+    use AffectsTaskCosts;
     use HasDocumentCode;
 
     /** @use HasFactory<PurchaseOrderFactory> */
@@ -39,6 +41,7 @@ class PurchaseOrder extends Model
         'purchase_request_id',
         'supplier_id',
         'project_id',
+        'task_id',
         'category',
         'order_date',
         'delivery_date',

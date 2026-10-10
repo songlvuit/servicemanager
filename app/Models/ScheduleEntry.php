@@ -14,6 +14,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Một lịch làm việc: việc gì, lúc nào, ở đâu, ai tham gia, cho dự án nào.
+ * Mỗi lịch (trừ lịch nghỉ) gắn với một công việc. Lịch có `from_task` là lịch
+ * của chính công việc đó: nó được tạo và cập nhật theo công việc (TaskSchedule),
+ * không sửa trực tiếp trên trang Lịch.
  * Lịch nghỉ phép là một lịch có loại "nghỉ" (schedule_types.is_leave) và ê-kíp
  * là những người nghỉ.
  *
@@ -29,7 +32,10 @@ class ScheduleEntry extends Model
 
     public const AUDIT_NAME = 'Lịch';
 
-    public const AUDIT_IGNORED = ['timesheets_logged_at'];
+    /** Lịch cả ngày kéo dài hơn số ngày này là "việc dài ngày" — xem isBackground(). */
+    public const LONG_DAYS = 3;
+
+    public const AUDIT_IGNORED = ['timesheets_logged_at', 'from_task'];
 
     /**
      * @var list<string>
@@ -55,6 +61,7 @@ class ScheduleEntry extends Model
     protected $attributes = [
         'is_all_day' => false,
         'status' => ScheduleStatus::Confirmed->value,
+        'from_task' => false,
     ];
 
     /**
@@ -68,6 +75,7 @@ class ScheduleEntry extends Model
             'is_all_day' => 'boolean',
             'status' => ScheduleStatus::class,
             'timesheets_logged_at' => 'datetime',
+            'from_task' => 'boolean',
         ];
     }
 
@@ -97,6 +105,22 @@ class ScheduleEntry extends Model
     public function isLeave(): bool
     {
         return (bool) $this->type?->is_leave;
+    }
+
+    /**
+     * "Việc dài ngày": lịch công việc cả ngày kéo dài hơn LONG_DAYS ngày (ví
+     * dụ hậu kỳ hai tuần). Người làm việc dài ngày vẫn nhận được việc khác,
+     * nên lịch này không giữ chỗ — không tính là trùng lịch — và hiện gọn
+     * thành một dải trên lịch thay vì một thẻ mỗi ngày.
+     */
+    public function isBackground(): bool
+    {
+        return ! $this->isLeave() && self::isLongSpan($this->starts_at, $this->ends_at, (bool) $this->is_all_day);
+    }
+
+    public static function isLongSpan(CarbonInterface $start, CarbonInterface $end, bool $allDay): bool
+    {
+        return $allDay && $start->copy()->startOfDay()->diffInDays($end->copy()->startOfDay()) >= self::LONG_DAYS;
     }
 
     public function isMultiDay(): bool
@@ -204,6 +228,16 @@ class ScheduleEntry extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class)->withTrashed();
+    }
+
+    /**
+     * Công việc của lịch: nơi theo dõi ngân sách và chi phí (lịch nghỉ không có).
+     *
+     * @return BelongsTo<Task, $this>
+     */
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
     }
 
     /**

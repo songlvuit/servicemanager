@@ -3,10 +3,8 @@
 namespace App\Filament\Resources\Projects\RelationManagers;
 
 use App\Filament\Pages\WorkCalendar;
-use App\Models\Project;
 use App\Models\ScheduleEntry;
 use BackedEnum;
-use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
@@ -77,22 +75,10 @@ class ScheduleRelationManager extends RelationManager
                     ->placeholder('Chưa ghi')
                     ->toggleable(),
             ])
-            ->headerActions([
-                Action::make('schedule')
-                    ->label('Xếp lịch cho dự án')
-                    ->icon(Heroicon::OutlinedPlus)
-                    ->visible(fn (): bool => (auth()->user()?->can('create', ScheduleEntry::class) ?? false)
-                        && $this->getOwnerRecord() instanceof Project
-                        && ! $this->getOwnerRecord()->isClosed())
-                    ->url(fn (): string => WorkCalendar::getUrl([
-                        'project' => $this->getOwnerRecord()->getKey(),
-                        'action' => 'createEntry',
-                    ])),
-            ])
             ->recordUrl(fn (ScheduleEntry $record): string => WorkCalendar::entryUrl($record))
             ->defaultSort('starts_at', 'desc')
             ->emptyStateIcon(Heroicon::OutlinedCalendarDays)
             ->emptyStateHeading('Dự án chưa có lịch nào.')
-            ->emptyStateDescription('Xếp lịch quay, livestream, họp… cho dự án để cả ê-kíp cùng nắm và để ghi giờ công sau này.');
+            ->emptyStateDescription('Lịch tự lấy từ các công việc có ngày bắt đầu của dự án. Thêm công việc ở tab Công việc để nó hiện ở đây và trên Lịch làm việc.');
     }
 }

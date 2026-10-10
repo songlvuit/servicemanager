@@ -401,16 +401,32 @@ class ScheduleTest extends TestCase
         $this->assertSame(['2026-10-05', '2026-10-06'], $trip->timesheets()->orderBy('work_date')->get()->map(fn (Timesheet $t): string => $t->work_date->toDateString())->all());
     }
 
-    public function test_timesheets_cannot_be_logged_too_early_or_without_a_project_or_permission(): void
+    public function test_timesheets_are_logged_for_a_schedule_without_a_project_as_overhead(): void
+    {
+        $project = $this->makeProject(['status' => ProjectStatus::Active]);
+        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay, $this->sang]);
+
+        $this->assertSame(2, app(ScheduleTimesheets::class)->log($entry, $this->pm, 4));
+
+        $timesheets = $entry->timesheets()->get();
+
+        $this->assertSame([null, null], $timesheets->pluck('project_id')->all());
+        // 4 giờ × 150.000 và 4 giờ × 100.000: vẫn là chi phí nhân sự, nhưng không vào dự án nào.
+        $this->assertEqualsCanonicalizing(['600000.00', '400000.00'], $timesheets->pluck('cost')->all());
+        $this->assertSame('0.00', $project->refresh()->labor_cost);
+        $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
+    }
+
+    public function test_timesheets_cannot_be_logged_too_early_or_for_leave_or_without_permission(): void
     {
         $project = $this->makeProject(['status' => ProjectStatus::Active]);
         $service = app(ScheduleTimesheets::class);
 
         $future = $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->quay], ['project_id' => $project->getKey()]);
-        $noProject = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay]);
+        $leave = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay], ['schedule_type_id' => ScheduleType::leave()->getKey()]);
         $past = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay], ['project_id' => $project->getKey()]);
 
-        foreach ([[$future, 'Lịch chưa diễn ra nên chưa ghi giờ công được.'], [$noProject, 'Chỉ ghi giờ công cho lịch có gắn dự án.']] as [$entry, $message]) {
+        foreach ([[$future, 'Lịch chưa diễn ra nên chưa ghi giờ công được.'], [$leave, 'Lịch nghỉ / bận không ghi giờ công.']] as [$entry, $message]) {
             try {
                 $service->log($entry, $this->pm, 4);
                 $this->fail('Phải từ chối ghi giờ công.');

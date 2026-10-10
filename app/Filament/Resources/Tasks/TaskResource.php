@@ -3,7 +3,13 @@
 namespace App\Filament\Resources\Tasks;
 
 use App\Filament\Resources\Tasks\Pages\ManageTasks;
+use App\Filament\Resources\Tasks\Pages\ViewTask;
+use App\Filament\Resources\Tasks\RelationManagers\ExpensesRelationManager;
+use App\Filament\Resources\Tasks\RelationManagers\PurchasesRelationManager;
+use App\Filament\Resources\Tasks\RelationManagers\ScheduleRelationManager;
+use App\Filament\Resources\Tasks\RelationManagers\TimesheetsRelationManager;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
+use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\Tables\TasksTable;
 use App\Filament\Support\VietnameseLabels;
 use App\Models\Task;
@@ -42,15 +48,31 @@ class TaskResource extends Resource
         return $schema->components(TaskForm::components());
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return TaskInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return TasksTable::configure($table);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            ExpensesRelationManager::class,
+            PurchasesRelationManager::class,
+            TimesheetsRelationManager::class,
+            ScheduleRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
     {
         return [
             'index' => ManageTasks::route('/'),
+            'view' => ViewTask::route('/{record}'),
         ];
     }
 
@@ -60,7 +82,7 @@ class TaskResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['project', 'assignee', 'parent'])
+            ->with(['project', 'assignee', 'parent', 'schedule.type', 'schedule.crew', 'customer'])
             ->visibleTo(auth()->user());
     }
 

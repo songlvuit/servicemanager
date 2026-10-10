@@ -78,7 +78,7 @@ class ApprovalRuleResource extends Resource
                     ->label('Từ số tiền')
                     ->default(0)
                     ->required(),
-                Fields::money('max_amount')
+                Fields::money('max_amount', nullable: true)
                     ->label('Đến số tiền')
                     ->gte('min_amount')
                     ->helperText('Bỏ trống = không giới hạn.'),

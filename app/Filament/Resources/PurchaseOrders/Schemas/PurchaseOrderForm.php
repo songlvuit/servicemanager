@@ -7,6 +7,7 @@ use App\Enums\PurchaseRequestStatus;
 use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
 use App\Filament\Resources\Expenses\Schemas\ExpenseForm;
 use App\Filament\Support\Fields;
+use App\Filament\Support\TaskField;
 use App\Models\PurchaseRequest;
 use App\Support\Decimal;
 use App\Support\Money;
@@ -61,6 +62,7 @@ class PurchaseOrderForm
                                 }
 
                                 $set('project_id', $request->project_id);
+                                $set('task_id', $request->task_id);
                                 $set('supplier_id', $request->supplier_id);
                                 $set('category', $request->category->value);
                             })
@@ -76,7 +78,12 @@ class PurchaseOrderForm
                             ->options(fn (): array => BudgetItemForm::projectOptions())
                             ->default(fn (): ?int => static::sourceRequest()?->project_id)
                             ->searchable()
-                            ->required(),
+                            ->placeholder('Không gắn dự án')
+                            ->helperText('Bỏ trống nếu mua cho công ty dùng chung, không thuộc dự án nào.')
+                            ->live()
+                            ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null)),
+                        TaskField::select()
+                            ->default(fn (): ?int => static::sourceRequest()?->task_id),
                         Select::make('category')
                             ->label('Nhóm chi phí')
                             ->options(BudgetCategory::class)

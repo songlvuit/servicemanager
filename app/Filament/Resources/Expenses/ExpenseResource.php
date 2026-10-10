@@ -86,7 +86,7 @@ class ExpenseResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['project', 'employee'])
+            ->with(['project', 'task', 'employee'])
             ->visibleTo(auth()->user())
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,

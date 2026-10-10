@@ -14,13 +14,15 @@ use Illuminate\Auth\Access\AuthorizationException;
 
 /**
  * Ghi giờ công cho cả ê-kíp từ một lịch đã làm xong: mỗi người, mỗi ngày của
- * lịch một dòng giờ công vào dự án của lịch. Giờ công tự tính ra chi phí nhân
- * sự của dự án (giờ × đơn giá giờ của từng người).
+ * lịch một dòng giờ công (giờ × đơn giá giờ của từng người). Lịch có gắn dự án
+ * thì chi phí nhân sự tính vào dự án đó; lịch độc lập thì là chi phí chung.
  *
  * Gọi lại nhiều lần không ghi trùng: người / ngày nào đã ghi thì bỏ qua.
  */
 class ScheduleTimesheets
 {
+    public function __construct(private readonly ScheduleTasks $tasks) {}
+
     /** Số giờ mặc định của một ngày làm việc trọn ngày. */
     public const FULL_DAY_HOURS = 8;
 
@@ -50,11 +52,11 @@ class ScheduleTimesheets
 
         $entry->load(['crew', 'project', 'type']);
 
-        if ($entry->isLeave() || $entry->project === null) {
-            throw new WorkflowException('Chỉ ghi giờ công cho lịch có gắn dự án.');
+        if ($entry->isLeave()) {
+            throw new WorkflowException('Lịch nghỉ / bận không ghi giờ công.');
         }
 
-        if ($entry->project->trashed() || $entry->project->isClosed()) {
+        if ($entry->project !== null && ($entry->project->trashed() || $entry->project->isClosed())) {
             throw new WorkflowException("Dự án {$entry->project->code} đã hoàn thành hoặc đã huỷ nên không nhận thêm giờ công.");
         }
 
@@ -101,6 +103,8 @@ class ScheduleTimesheets
                     $timesheet = Timesheet::create([
                         'user_id' => $user->getKey(),
                         'project_id' => $entry->project_id,
+                        // Giờ công vào luôn công việc của lịch để tính chi phí của công việc.
+                        'task_id' => $entry->task_id,
                         'work_date' => $day->toDateString(),
                         'hours' => $hours,
                         'description' => 'Theo lịch: '.$entry->title,
@@ -115,6 +119,8 @@ class ScheduleTimesheets
                 'timesheets_logged_at' => now(),
                 'status' => ScheduleStatus::Done,
             ])->save();
+
+            $this->tasks->completed($entry);
 
             return $created;
         });

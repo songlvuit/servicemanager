@@ -77,7 +77,9 @@ class ExpensePagesTest extends TestCase
         Livewire::test(CreateExpense::class)
             ->fillForm(['project_id' => null, 'category' => null, 'description' => '', 'amount' => 0])
             ->call('create')
-            ->assertHasFormErrors(['project_id', 'category', 'description', 'amount']);
+            ->assertHasFormErrors(['category', 'description', 'amount'])
+            // Dự án không bắt buộc: khoản chi có thể là chi phí chung.
+            ->assertHasNoFormErrors(['project_id']);
     }
 
     public function test_pages_follow_ownership_and_status(): void

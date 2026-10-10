@@ -18,14 +18,14 @@ use Livewire\Component as Livewire;
 
 /**
  * Form ghi nhận giờ công (mục 28), dùng chung cho màn hình Chấm công và tab
- * Chấm công của dự án. Người không có quyền "Xem tất cả" chỉ ghi giờ cho chính mình.
+ * Chấm công của dự án / của công việc. Người không có quyền "Xem tất cả" chỉ ghi giờ cho chính mình.
  */
 class TimesheetForm
 {
     /**
      * @return list<Component>
      */
-    public static function components(bool $withProject = true): array
+    public static function components(bool $withProject = true, bool $withTask = true): array
     {
         return [
             Select::make('user_id')
@@ -40,7 +40,8 @@ class TimesheetForm
                 ->label('Dự án')
                 ->options(fn (): array => BudgetItemForm::projectOptions())
                 ->searchable()
-                ->required()
+                ->placeholder('Không gắn dự án')
+                ->helperText('Bỏ trống cho việc độc lập: giờ công khi đó là chi phí chung của công ty.')
                 ->live()
                 ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null))
                 ->visible($withProject),
@@ -48,7 +49,9 @@ class TimesheetForm
                 ->label('Công việc')
                 ->options(fn (Get $get, Livewire $livewire, ?Timesheet $record): array => static::taskOptions($get, $livewire, $record))
                 ->searchable()
-                ->placeholder('Không gắn với công việc nào'),
+                ->placeholder('Không gắn với công việc nào')
+                // Trên trang công việc thì công việc đã xác định sẵn.
+                ->visible($withTask),
             DatePicker::make('work_date')
                 ->label('Ngày làm việc')
                 ->default(fn (): string => today()->toDateString())
@@ -72,7 +75,8 @@ class TimesheetForm
     }
 
     /**
-     * Công việc của dự án đang chọn mà người dùng được xem.
+     * Công việc của dự án đang chọn mà người dùng được xem; chưa chọn dự án
+     * thì là các công việc độc lập (không thuộc dự án nào).
      *
      * @return array<int, string>
      */
@@ -82,12 +86,12 @@ class TimesheetForm
             ? $livewire->getOwnerRecord()->getKey()
             : ($get('project_id') ?? $record?->project_id);
 
-        if (blank($projectId)) {
-            return [];
-        }
-
         return Task::query()
-            ->where('project_id', $projectId)
+            ->when(
+                filled($projectId),
+                fn ($query) => $query->where('project_id', $projectId),
+                fn ($query) => $query->whereNull('project_id'),
+            )
             ->visibleTo(auth()->user())
             ->orderBy('name')
             ->pluck('name', 'id')

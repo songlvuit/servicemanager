@@ -13,6 +13,17 @@ use Illuminate\Support\Carbon;
 class Filters
 {
     /**
+     * Chỉ hiện những dòng KHÔNG gắn dự án (việc độc lập, chi phí chung).
+     */
+    public static function withoutProject(string $label = 'Không gắn dự án'): Filter
+    {
+        return Filter::make('without_project')
+            ->label($label)
+            ->toggle()
+            ->query(fn (Builder $query): Builder => $query->whereNull($query->getModel()->qualifyColumn('project_id')));
+    }
+
+    /**
      * Lọc theo khoảng ngày "Từ ngày – Đến ngày" trên một cột ngày.
      */
     public static function dateRange(string $column, string $label): Filter

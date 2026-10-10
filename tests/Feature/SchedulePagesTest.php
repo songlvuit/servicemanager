@@ -11,13 +11,18 @@ use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\RelationManagers\ScheduleRelationManager;
 use App\Filament\Resources\ScheduleTypes\Pages\ManageScheduleTypes;
 use App\Filament\Resources\ScheduleTypes\ScheduleTypeResource;
+use App\Filament\Resources\Tasks\Pages\ManageTasks;
+use App\Filament\Resources\Tasks\Pages\ViewTask;
+use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\Scheduling\ScheduleForm;
 use App\Filament\Widgets\MySchedule;
 use App\Models\AuditLog;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
+use App\Models\Task;
 use App\Models\Timesheet;
 use App\Models\User;
+use App\Services\Scheduling\ScheduleManager;
 use App\Support\PublicCalendarLink;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -127,50 +132,68 @@ class SchedulePagesTest extends TestCase
             ->assertOk();
     }
 
-    public function test_planner_creates_edits_and_deletes_a_schedule_from_the_calendar(): void
+    public function test_calendar_follows_tasks_and_cannot_add_or_edit_work(): void
     {
         $type = ScheduleType::query()->where('name', 'Livestream')->first();
         $project = $this->makeProject(['status' => ProjectStatus::Active]);
 
         $this->actingAs($this->pm);
 
+        // Lịch không nhập ở trang Lịch: thêm công việc ở mục Công việc.
         Livewire::test(WorkCalendar::class)
-            ->assertActionVisible('createEntry')
-            ->callAction('createEntry', data: [
-                'title' => 'Livestream ra mắt',
-                'schedule_type_id' => $type->getKey(),
-                'status' => 'confirmed',
+            ->assertActionDoesNotExist('createEntry')
+            ->assertSee('tự lấy từ Công việc và Dự án')
+            ->assertDontSee('Livestream ra mắt');
+
+        Livewire::test(ManageTasks::class)
+            ->callAction('create', data: [
+                'project_id' => $project->getKey(),
+                'name' => 'Livestream ra mắt',
+                'assignee_id' => $this->employee->getKey(),
                 'start_date' => '2026-10-08',
-                'end_date' => '2026-10-08',
+                'schedule_type_id' => $type->getKey(),
+                'is_all_day' => false,
                 'start_time' => '13:30',
                 'end_time' => '17:00',
-                'is_all_day' => false,
-                'crew' => [$this->employee->getKey()],
-                'project_id' => $project->getKey(),
                 'location' => 'Studio A',
                 'equipment' => '3 cam, 2 mic',
             ])
-            ->assertHasNoActionErrors()
-            ->assertNotified('Đã thêm lịch.')
-            ->assertSee('Livestream ra mắt');
+            ->assertHasNoActionErrors();
 
+        $task = Task::query()->sole();
         $entry = ScheduleEntry::query()->sole();
 
+        $this->assertTrue($entry->from_task);
+        $this->assertSame($task->getKey(), $entry->task_id);
+        $this->assertSame('Livestream ra mắt', $entry->title);
         $this->assertSame('2026-10-08 13:30:00', $entry->starts_at->toDateTimeString());
         $this->assertSame('2026-10-08 17:00:00', $entry->ends_at->toDateTimeString());
+        $this->assertSame($type->getKey(), $entry->schedule_type_id);
         $this->assertSame($project->getKey(), $entry->project_id);
         $this->assertSame($project->customer_id, $entry->customer_id);
+        $this->assertSame('Studio A', $entry->location);
         $this->assertSame([$this->employee->getKey()], $entry->crew->pluck('id')->all());
         $this->assertSame($this->pm->getKey(), $entry->created_by);
 
-        // Sửa: đổi thành lịch cả ngày, hai ngày.
+        $view = TestAction::make('viewEntry')->arguments(['entry' => $entry->getKey()]);
+
+        // Trên lịch: xem được, mở sang công việc được, nhưng không sửa / xoá được.
         Livewire::test(WorkCalendar::class)
-            ->mountAction('editEntry', ['entry' => $entry->getKey()])
-            ->assertActionDataSet(['title' => 'Livestream ra mắt', 'start_time' => '13:30', 'crew' => [$this->employee->getKey()]])
-            ->setActionData(['is_all_day' => true, 'end_date' => '2026-10-09', 'title' => 'Livestream ra mắt (2 ngày)'])
-            ->callMountedAction()
-            ->assertHasNoActionErrors()
-            ->assertNotified('Đã lưu lịch.');
+            ->assertSee('Livestream ra mắt')
+            ->assertActionVisible([$view, 'task'])
+            ->assertActionHidden([$view, 'edit'])
+            ->assertActionHidden([$view, 'delete'])
+            ->callAction('editEntry', data: ['title' => 'Sửa trên lịch'], arguments: ['entry' => $entry->getKey()])
+            ->assertNotified('Lịch này lấy từ công việc. Hãy sửa hoặc xoá công việc ở mục Công việc.')
+            ->callAction('deleteEntry', arguments: ['entry' => $entry->getKey()])
+            ->assertNotified('Lịch này lấy từ công việc. Hãy sửa hoặc xoá công việc ở mục Công việc.');
+
+        $this->assertSame('Livestream ra mắt', $entry->refresh()->title);
+
+        // Sửa công việc: lịch đổi theo — thành cả ngày, hai ngày.
+        Livewire::test(ViewTask::class, ['record' => $task->getRouteKey()])
+            ->callAction('edit', data: ['name' => 'Livestream ra mắt (2 ngày)', 'due_date' => '2026-10-09', 'is_all_day' => true])
+            ->assertHasNoActionErrors();
 
         $entry->refresh();
 
@@ -178,14 +201,16 @@ class SchedulePagesTest extends TestCase
         $this->assertSame('08/10 – 09/10 (cả ngày)', $entry->timeLabel());
         $this->assertSame('Livestream ra mắt (2 ngày)', $entry->title);
 
-        Livewire::test(WorkCalendar::class)
-            ->callAction('deleteEntry', arguments: ['entry' => $entry->getKey()])
-            ->assertNotified('Đã xoá lịch.');
+        // Trang công việc cho biết công việc đang nằm ở đâu trên lịch.
+        $this->get(TaskResource::getUrl('view', ['record' => $task]))->assertOk()->assertSee('08/10 – 09/10 (cả ngày)');
+
+        // Xoá công việc: lịch cũng mất.
+        $task->delete();
 
         $this->assertSame(0, ScheduleEntry::query()->count());
     }
 
-    public function test_the_form_validates_time_and_warns_about_conflicts(): void
+    public function test_the_task_form_validates_time_and_warns_about_conflicts(): void
     {
         $type = ScheduleType::query()->where('name', 'Livestream')->first();
         $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->employee], ['title' => 'Quay TVC']);
@@ -193,37 +218,38 @@ class SchedulePagesTest extends TestCase
         $this->actingAs($this->pm);
 
         $data = [
-            'title' => 'Chụp ảnh',
-            'schedule_type_id' => $type->getKey(),
+            'name' => 'Chụp ảnh',
+            'assignee_id' => $this->employee->getKey(),
             'start_date' => '2026-10-08',
-            'end_date' => '2026-10-08',
+            'schedule_type_id' => $type->getKey(),
+            'is_all_day' => false,
             'start_time' => '10:00',
             'end_time' => '11:00',
-            'crew' => [$this->employee->getKey()],
         ];
 
-        // Giờ sai định dạng bị chặn ngay ở form.
-        Livewire::test(WorkCalendar::class)
-            ->callAction('createEntry', data: [...$data, 'start_time' => '25:00'])
+        // Giờ sai định dạng và giờ kết thúc trước giờ bắt đầu bị chặn ngay ở form.
+        Livewire::test(ManageTasks::class)
+            ->callAction('create', data: [...$data, 'start_time' => '25:00'])
             ->assertHasActionErrors(['start_time']);
 
-        // Giờ kết thúc trước giờ bắt đầu: báo lỗi, không lưu.
-        Livewire::test(WorkCalendar::class)
-            ->callAction('createEntry', data: [...$data, 'start_time' => '12:00', 'end_time' => '09:00'])
-            ->assertNotified('Giờ kết thúc phải sau giờ bắt đầu.');
+        Livewire::test(ManageTasks::class)
+            ->callAction('create', data: [...$data, 'start_time' => '12:00', 'end_time' => '09:00'])
+            ->assertHasActionErrors(['end_time']);
 
-        $this->assertSame(1, ScheduleEntry::query()->count());
+        $this->assertSame(0, Task::query()->count());
 
-        // Trùng lịch: form hiện cảnh báo trước khi lưu; vẫn lưu được và báo ai bị trùng.
-        $this->assertSame(['Ngô Quay: trùng "Quay TVC" (08/10 · 08:00 – 12:00)'], ScheduleForm::conflictsFor($data));
-        $this->assertSame([], ScheduleForm::conflictsFor([...$data, 'start_time' => '12:00', 'end_time' => '14:00']));
-        $this->assertSame([], ScheduleForm::conflictsFor([...$data, 'status' => 'cancelled']));
-        $this->assertSame([], ScheduleForm::conflictsFor([...$data, 'start_date' => 'đang gõ dở']));
+        // Kiểm tra trùng lịch theo ngày giờ đang nhập.
+        $state = ['crew' => [$this->employee->getKey()], 'start_date' => '2026-10-08', 'end_date' => '2026-10-08', 'start_time' => '10:00', 'end_time' => '11:00'];
 
-        Livewire::test(WorkCalendar::class)
-            ->callAction('createEntry', data: $data)
-            ->assertHasNoActionErrors()
-            ->assertNotified('Đã thêm lịch. Có người bị trùng lịch:');
+        $this->assertSame(['Ngô Quay: trùng "Quay TVC" (08/10 · 08:00 – 12:00)'], ScheduleForm::conflictsFor($state));
+        $this->assertSame([], ScheduleForm::conflictsFor([...$state, 'start_time' => '12:00', 'end_time' => '14:00']));
+        $this->assertSame([], ScheduleForm::conflictsFor([...$state, 'status' => 'cancelled']));
+        $this->assertSame([], ScheduleForm::conflictsFor([...$state, 'start_date' => 'đang gõ dở']));
+
+        // Trùng lịch chỉ là cảnh báo: công việc vẫn lưu được và lên lịch.
+        Livewire::test(ManageTasks::class)
+            ->callAction('create', data: $data)
+            ->assertHasNoActionErrors();
 
         $this->assertSame(2, ScheduleEntry::query()->count());
 
@@ -239,8 +265,10 @@ class SchedulePagesTest extends TestCase
 
         $this->actingAs($this->employee);
 
+        $othersLeave = app(ScheduleManager::class)->registerLeave($this->pm, Carbon::parse('2026-10-20')->startOfDay(), Carbon::parse('2026-10-20')->endOfDay());
+
         Livewire::test(WorkCalendar::class)
-            ->assertActionHidden('createEntry')
+            ->assertActionDoesNotExist('createEntry')
             ->assertActionHidden('publicLink')
             ->assertActionVisible('registerLeave')
             ->assertActionVisible('subscribe')
@@ -248,12 +276,18 @@ class SchedulePagesTest extends TestCase
             ->assertActionHidden([$view($entry), 'edit'])
             ->assertActionHidden([$view($entry), 'delete'])
             ->assertActionHidden([$view($entry), 'timesheets'])
-            // Cố gọi thẳng thao tác sửa / xoá cũng bị từ chối.
+            ->assertActionHidden([$view($othersLeave), 'edit'])
+            ->assertActionHidden([$view($othersLeave), 'delete'])
+            // Cố gọi thẳng thao tác sửa / xoá cũng bị từ chối: lịch công việc thì không sửa ở đây,
+            // lịch nghỉ của người khác thì không có quyền.
             ->callAction('deleteEntry', arguments: ['entry' => $entry->getKey()])
+            ->assertNotified('Lịch này lấy từ công việc. Hãy sửa hoặc xoá công việc ở mục Công việc.')
+            ->callAction('deleteEntry', arguments: ['entry' => $othersLeave->getKey()])
             ->assertNotified('Bạn không có quyền xoá lịch này.')
-            ->callAction('editEntry', data: ['title' => 'Đã sửa trộm'], arguments: ['entry' => $entry->getKey()])
+            ->callAction('editEntry', data: ['start_date' => '2026-10-21', 'end_date' => '2026-10-21'], arguments: ['entry' => $othersLeave->getKey()])
             ->assertNotified('Bạn không có quyền xếp lịch.');
 
+        $this->assertSame('2026-10-20', $othersLeave->refresh()->starts_at->toDateString());
         $this->assertSame('Livestream', $entry->refresh()->title);
 
         // Đăng ký nghỉ hai ngày.
@@ -262,7 +296,7 @@ class SchedulePagesTest extends TestCase
             ->assertHasNoActionErrors()
             ->assertNotified('Đã đăng ký nghỉ.');
 
-        $leave = ScheduleEntry::query()->whereKeyNot($entry->getKey())->sole();
+        $leave = ScheduleEntry::query()->whereKeyNot([$entry->getKey(), $othersLeave->getKey()])->sole();
 
         $this->assertTrue($leave->isLeave());
         $this->assertSame('12/10 – 13/10 (cả ngày)', $leave->timeLabel());

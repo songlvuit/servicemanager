@@ -4,10 +4,8 @@
      *
      * @var array $data       Kết quả của CalendarQuery::week()
      * @var bool $clickable   Trong panel: bấm thẻ để mở chi tiết.
-     * @var bool $canCreate
      */
     $clickable ??= false;
-    $canCreate ??= false;
     $bands = ['morning' => 'Sáng', 'afternoon' => 'Chiều – tối'];
 @endphp
 
@@ -21,23 +19,29 @@
                         <span class="sm-day-date">{{ $day['date']->format('d/m') }}</span>
                     </span>
 
-                    @if ($canCreate)
-                        <button
-                            type="button"
-                            class="sm-day-add"
-                            title="Thêm lịch ngày {{ $day['date']->format('d/m') }}"
-                            aria-label="Thêm lịch ngày {{ $day['date']->format('d/m') }}"
-                            wire:click="mountAction('createEntry', { date: '{{ $day['date']->toDateString() }}' })"
-                        >
-                            @svg('heroicon-m-plus')
-                        </button>
-                    @endif
                 </header>
 
                 <div class="sm-day-meta">
                     @foreach ($day['leave'] as $entry)
                         @include('filament.pages.calendar.chip', ['entry' => $entry, 'day' => $day['date'], 'showCrew' => true, 'clickable' => $clickable, 'conflictNames' => []])
                     @endforeach
+
+                    {{-- Việc dài ngày: hiện gọn 3 việc đầu, phần còn lại bấm để mở. --}}
+                    @php($long = $day['long'] ?? [])
+
+                    @foreach (array_slice($long, 0, 3) as $entry)
+                        @include('filament.pages.calendar.chip', ['entry' => $entry, 'day' => $day['date'], 'showCrew' => false, 'clickable' => $clickable, 'conflictNames' => []])
+                    @endforeach
+
+                    @if (count($long) > 3)
+                        <details class="sm-more">
+                            <summary>+{{ count($long) - 3 }} việc dài ngày</summary>
+
+                            @foreach (array_slice($long, 3) as $entry)
+                                @include('filament.pages.calendar.chip', ['entry' => $entry, 'day' => $day['date'], 'showCrew' => false, 'clickable' => $clickable, 'conflictNames' => []])
+                            @endforeach
+                        </details>
+                    @endif
 
                     @foreach ($day['milestones'] as $milestone)
                         <div class="sm-chip is-milestone" title="{{ $milestone }}">

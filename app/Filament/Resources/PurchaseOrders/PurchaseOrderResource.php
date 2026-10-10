@@ -13,6 +13,7 @@ use App\Filament\Resources\PurchaseOrders\Schemas\PurchaseOrderForm;
 use App\Filament\Resources\PurchaseRequests\PurchaseRequestResource;
 use App\Filament\Support\Columns;
 use App\Filament\Support\Filters;
+use App\Filament\Support\TaskField;
 use App\Filament\Support\VietnameseLabels;
 use App\Models\PurchaseOrder;
 use App\Support\Decimal;
@@ -88,9 +89,11 @@ class PurchaseOrderResource extends Resource
                             ->label('Nhà cung cấp'),
                         TextEntry::make('project.name')
                             ->label('Dự án')
+                            ->placeholder('Không gắn dự án')
                             ->url(fn (PurchaseOrder $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
                                 ? ProjectResource::getUrl('view', ['record' => $record->project])
                                 : null),
+                        TaskField::entry(),
                         TextEntry::make('category')
                             ->label('Nhóm chi phí')
                             ->badge(),
@@ -165,7 +168,7 @@ class PurchaseOrderResource extends Resource
                 Columns::code(label: 'Số đơn'),
                 TextColumn::make('supplier.name')
                     ->label('Nhà cung cấp')
-                    ->description(fn (PurchaseOrder $record): ?string => $record->project?->name)
+                    ->description(fn (PurchaseOrder $record): ?string => implode(' · ', array_filter([$record->project?->name, $record->task?->name])) ?: null)
                     ->wrap()
                     ->searchable(),
                 TextColumn::make('order_date')
@@ -196,6 +199,7 @@ class PurchaseOrderResource extends Resource
                     ->relationship('project', 'name')
                     ->searchable()
                     ->preload(),
+                Filters::withoutProject(),
                 Filters::dateRange('order_date', 'Ngày đặt hàng'),
             ])
             ->recordActions([
@@ -224,7 +228,7 @@ class PurchaseOrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['supplier', 'project']);
+        return parent::getEloquentQuery()->with(['supplier', 'project', 'task']);
     }
 
     /**

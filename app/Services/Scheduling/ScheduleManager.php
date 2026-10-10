@@ -6,26 +6,43 @@ use App\Enums\ScheduleStatus;
 use App\Exceptions\WorkflowException;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
+use App\Models\Task;
 use App\Models\User;
 use App\Support\Audit\AuditLogger;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 /**
  * Mọi thao tác ghi lên lịch làm việc đi qua đây: kiểm tra quyền, kiểm tra
  * thời gian, lưu lịch cùng ê-kíp trong một transaction, ghi nhật ký và gửi
  * thông báo cho những người bị ảnh hưởng.
+ *
+ * Trên giao diện, lịch công việc KHÔNG được tạo hay sửa trực tiếp: nó là bản
+ * chiếu của công việc, do TaskSchedule gọi saveForTask() mỗi khi công việc
+ * đổi. save() / delete() còn dùng cho lịch nghỉ và cho dữ liệu nhập bằng mã
+ * (seeder, tích hợp): khi đó công việc của lịch được tạo / cập nhật theo lịch
+ * — xem ScheduleTasks.
  */
 class ScheduleManager
 {
-    public function __construct(private readonly ScheduleNotifier $notifier) {}
+    /** Công việc được chọn và ngân sách của nó đi kèm dữ liệu lịch nhưng không phải cột của lịch. */
+    private const TASK_OPTIONS = ['task_id', 'task_budget'];
+
+    public function __construct(
+        private readonly ScheduleNotifier $notifier,
+        private readonly ScheduleTasks $tasks,
+    ) {}
 
     /**
      * Tạo mới ($entry = null) hoặc cập nhật một lịch.
      *
-     * @param  array<string, mixed>  $attributes  Các cột của lịch (title, schedule_type_id, starts_at, ends_at…).
+     * @param  array<string, mixed>  $attributes  Các cột của lịch (title, schedule_type_id, starts_at, ends_at…),
+     *                                            kèm tuỳ chọn `task_id` (gắn vào công việc có sẵn) và `task_budget`
+     *                                            (ngân sách của công việc — chỉ nhận từ người xem được chi phí nội bộ).
      * @param  list<int|string>  $crewIds  Người dùng trong ê-kíp.
      */
     public function save(?ScheduleEntry $entry, array $attributes, array $crewIds, User $by): ScheduleEntry
@@ -45,18 +62,69 @@ class ScheduleManager
             $crewIds = [$by->getKey()];
         }
 
+        $taskOptions = Arr::only($attributes, self::TASK_OPTIONS);
+
+        if ($by->cannot('internal_costs.view')) {
+            unset($taskOptions['task_budget']);
+        }
+
+        return $this->persist($entry, Arr::except($attributes, self::TASK_OPTIONS), $crewIds, $by, taskOptions: $taskOptions);
+    }
+
+    /**
+     * Lưu lịch CỦA MỘT CÔNG VIỆC theo dữ liệu của công việc đó (TaskSchedule gọi).
+     * Quyền đã được xét ở công việc nên ở đây không xét lại quyền xếp lịch.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @param  list<int|string>  $crewIds
+     */
+    public function saveForTask(Task $task, ?ScheduleEntry $entry, array $attributes, array $crewIds, ?User $by, bool $notify = true): ScheduleEntry
+    {
+        return $this->persist($entry ?? new ScheduleEntry, $attributes, $crewIds, $by, mirrorOf: $task, notify: $notify);
+    }
+
+    /**
+     * Bỏ lịch của một công việc khi công việc không còn lên lịch nữa (không
+     * xét quyền, không đụng tới công việc).
+     */
+    public function discard(ScheduleEntry $entry, ?User $by): void
+    {
+        $this->remove($entry, $by);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @param  list<int|string>  $crewIds
+     * @param  Task|null  $mirrorOf  Lịch là bản chiếu của công việc này: gắn thẳng vào công việc, không tạo / sửa ngược lại công việc.
+     * @param  array<string, mixed>  $taskOptions
+     */
+    private function persist(ScheduleEntry $entry, array $attributes, array $crewIds, ?User $by, ?Task $mirrorOf = null, array $taskOptions = [], bool $notify = true): ScheduleEntry
+    {
+        $isNew = ! $entry->exists;
+
         $entry->fill($attributes);
         $this->validate($entry);
 
         if ($isNew) {
-            $entry->created_by = $by->getKey();
+            $entry->created_by = $by?->getKey();
         }
 
-        $crewIds = User::query()->whereIn('id', array_map('intval', $crewIds))->pluck('id')->all();
+        // Giữ thứ tự người dùng chọn: người đầu tiên là người phụ trách công việc của lịch.
+        $crewIds = array_values(array_unique(array_map('intval', $crewIds)));
+        $known = User::query()->whereIn('id', $crewIds)->pluck('id')->all();
+        $crewIds = array_values(array_filter($crewIds, fn (int $id): bool => in_array($id, $known, true)));
 
         $before = $isNew ? null : $this->snapshot($entry->fresh() ?? $entry);
 
-        AuditLogger::transactionAs($by, function () use ($entry, $crewIds, $before, $isNew): void {
+        AuditLogger::transactionAs($by, function () use ($entry, $crewIds, $before, $isNew, $taskOptions, $mirrorOf): void {
+            if ($mirrorOf !== null) {
+                $entry->task_id = $mirrorOf->getKey();
+                $entry->from_task = true;
+            } else {
+                // Tạo / cập nhật công việc của lịch trước khi lưu, lúc còn biết cột nào vừa đổi.
+                $this->tasks->sync($entry, $crewIds, $taskOptions);
+            }
+
             $entry->save();
 
             $changes = $entry->crew()->sync($crewIds);
@@ -76,7 +144,9 @@ class ScheduleManager
 
         $entry->load(['crew', 'type']);
 
-        $this->notify($entry, $before, $by);
+        if ($notify) {
+            $this->notify($entry, $before, $by);
+        }
 
         return $entry;
     }
@@ -127,11 +197,31 @@ class ScheduleManager
             throw new WorkflowException('Lịch này đã ghi giờ công nên không xoá được. Hãy chuyển sang trạng thái "Đã huỷ" nếu cần.');
         }
 
+        $task = $entry->task;
+
+        $this->remove($entry, $by, function () use ($task): void {
+            if ($task !== null) {
+                $this->tasks->discardIfUntouched($task);
+            }
+        });
+    }
+
+    /**
+     * Xoá lịch và báo cho ê-kíp nếu lịch còn hiệu lực.
+     */
+    private function remove(ScheduleEntry $entry, ?User $by, ?Closure $afterDelete = null): void
+    {
         $entry->load(['crew', 'type']);
         $crew = $entry->crew;
         $wasActive = $entry->status->occupiesTime() && $entry->ends_at->isFuture();
 
-        AuditLogger::transactionAs($by, fn () => $entry->delete());
+        AuditLogger::transactionAs($by, function () use ($entry, $afterDelete): void {
+            $entry->delete();
+
+            if ($afterDelete !== null) {
+                $afterDelete();
+            }
+        });
 
         if ($wasActive && ! $entry->isLeave()) {
             $this->notifier->cancelled($entry, $crew->reject(fn (User $user): bool => $user->is($by)));
@@ -189,7 +279,7 @@ class ScheduleManager
      *
      * @param  array{crew: Collection<int, User>, crewNames: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable, location: ?string, status: ScheduleStatus}|null  $before
      */
-    private function notify(ScheduleEntry $entry, ?array $before, User $by): void
+    private function notify(ScheduleEntry $entry, ?array $before, ?User $by): void
     {
         if ($entry->isLeave() || $entry->ends_at->isPast()) {
             return;

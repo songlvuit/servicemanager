@@ -3,7 +3,6 @@
      * Theo người: mỗi người một hàng, mỗi ngày một cột.
      *
      * @var array $data Kết quả của CalendarQuery::people()
-     * @var bool $canCreate
      */
 @endphp
 
@@ -45,19 +44,7 @@
                                 @endforeach
 
                                 @if ($entries === [])
-                                    @if ($canCreate)
-                                        <button
-                                            type="button"
-                                            class="sm-cell-add"
-                                            title="Xếp lịch cho {{ $row['user']->name }} ngày {{ $day['date']->format('d/m') }}"
-                                            aria-label="Xếp lịch cho {{ $row['user']->name }} ngày {{ $day['date']->format('d/m') }}"
-                                            wire:click="mountAction('createEntry', { date: '{{ $day['date']->toDateString() }}', user: {{ $row['user']->getKey() }} })"
-                                        >
-                                            @svg('heroicon-m-plus')
-                                        </button>
-                                    @else
-                                        <div class="sm-cell-free">Trống</div>
-                                    @endif
+                                    <div class="sm-cell-free">Trống</div>
                                 @endif
                             </div>
                         </td>

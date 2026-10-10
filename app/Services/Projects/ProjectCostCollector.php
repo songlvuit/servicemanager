@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
+use App\Models\Task;
 use App\Models\Timesheet;
 use App\Support\Decimal;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,33 @@ class ProjectCostCollector
      */
     public function byCategory(Project $project): array
     {
+        return $this->collect('project_id', $project->getKey());
+    }
+
+    /**
+     * Chi phí đã cam kết và thực tế của MỘT công việc (các chứng từ gắn task_id),
+     * cùng quy tắc với chi phí dự án.
+     *
+     * @return array{committed: string, actual: string}
+     */
+    public function forTask(Task $task): array
+    {
+        $total = self::EMPTY;
+
+        foreach ($this->collect('task_id', $task->getKey()) as $cost) {
+            $total['committed'] = Decimal::add($total['committed'], $cost['committed']);
+            $total['actual'] = Decimal::add($total['actual'], $cost['actual']);
+        }
+
+        return $total;
+    }
+
+    /**
+     * @param  'project_id'|'task_id'  $column
+     * @return array<string, array{committed: string, actual: string}> khoá là BudgetCategory->value
+     */
+    private function collect(string $column, int|string $id): array
+    {
         $costs = [];
 
         $add = function (string $category, mixed $amount, bool $committed, bool $actual) use (&$costs): void {
@@ -51,7 +79,7 @@ class ProjectCostCollector
         };
 
         $expenses = Expense::query()
-            ->where('project_id', $project->getKey())
+            ->where($column, $id)
             ->toBase()
             ->select('category', 'status', DB::raw('SUM(amount) as total'))
             ->groupBy('category', 'status')
@@ -64,7 +92,7 @@ class ProjectCostCollector
         }
 
         $requests = PurchaseRequest::query()
-            ->where('project_id', $project->getKey())
+            ->where($column, $id)
             ->where('status', PurchaseRequestStatus::Approved->value)
             ->toBase()
             ->select('category', DB::raw('SUM(amount) as total'))
@@ -76,7 +104,7 @@ class ProjectCostCollector
         }
 
         $orders = PurchaseOrder::query()
-            ->where('project_id', $project->getKey())
+            ->where($column, $id)
             ->toBase()
             ->select('category', 'status', DB::raw('SUM(subtotal) as total'))
             ->groupBy('category', 'status')
@@ -88,7 +116,7 @@ class ProjectCostCollector
             $add($row->category, $row->total, $status->isCommitted(), $status->isActual());
         }
 
-        $labor = Timesheet::query()->where('project_id', $project->getKey())->sum('cost');
+        $labor = Timesheet::query()->where($column, $id)->sum('cost');
 
         if (Decimal::isPositive($this->number($labor))) {
             $add(BudgetCategory::Personnel->value, $labor, true, true);
