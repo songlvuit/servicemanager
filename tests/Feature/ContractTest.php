@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\ContractStatus;
 use App\Enums\CustomerStatus;
 use App\Enums\SystemRole;
+use App\Enums\TaskStatus;
 use App\Exceptions\WorkflowException;
 use App\Filament\Resources\Contracts\ContractResource;
 use App\Filament\Resources\Contracts\Pages\CreateContract;
@@ -12,23 +13,23 @@ use App\Filament\Resources\Contracts\Pages\ViewContract;
 use App\Filament\Resources\Quotations\Pages\ViewQuotation;
 use App\Models\Contract;
 use App\Models\Customer;
-use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\Contracts\ContractWorkflow;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsQuotations;
 use Tests\TestCase;
 
 class ContractTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsQuotations;
     use RefreshDatabase;
 
-    private User $sales;
+    private User $accountant;
 
     private User $director;
 
@@ -38,7 +39,7 @@ class ContractTest extends TestCase
 
         $this->seedAccessControl();
 
-        $this->sales = $this->createUserWithRole(SystemRole::Sales);
+        $this->accountant = $this->createUserWithRole(SystemRole::Accountant);
         $this->director = $this->createUserWithRole(SystemRole::Director);
     }
 
@@ -55,15 +56,15 @@ class ContractTest extends TestCase
         $this->assertSame('270000000.00', $contract->refresh()->total_value);
     }
 
-    public function test_sales_creates_a_contract_from_an_accepted_quotation(): void
+    public function test_accountant_creates_a_contract_from_an_accepted_quotation(): void
     {
-        $quotation = $this->makeQuotation(creator: $this->sales);
-        $quotation = $this->workflow()->submit($quotation, $this->sales);
+        $quotation = $this->makeQuotation(creator: $this->accountant);
+        $quotation = $this->workflow()->submit($quotation, $this->accountant);
         $quotation = $this->workflow()->approve($quotation, $this->director);
-        $quotation = $this->workflow()->markSent($quotation, $this->sales);
-        $quotation = $this->workflow()->markAccepted($quotation, $this->sales);
+        $quotation = $this->workflow()->markSent($quotation, $this->accountant);
+        $quotation = $this->workflow()->markAccepted($quotation, $this->accountant);
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->accountant);
 
         // Trang báo giá có nút "Tạo hợp đồng".
         Livewire::test(ViewQuotation::class, ['record' => $quotation->getRouteKey()])
@@ -86,7 +87,7 @@ class ContractTest extends TestCase
         $contract = Contract::query()->where('quotation_id', $quotation->getKey())->first();
 
         $this->assertNotNull($contract);
-        $this->assertSame($this->sales->getKey(), $contract->created_by);
+        $this->assertSame($this->accountant->getKey(), $contract->created_by);
         $this->assertSame('10000000.00', $contract->contract_value);
         $this->assertSame('11000000.00', $contract->total_value);
 
@@ -97,9 +98,9 @@ class ContractTest extends TestCase
 
     public function test_contract_form_rejects_a_quotation_that_is_not_accepted(): void
     {
-        $draftQuotation = $this->makeQuotation(creator: $this->sales);
+        $draftQuotation = $this->makeQuotation(creator: $this->accountant);
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->accountant);
 
         Livewire::test(CreateContract::class)
             ->fillForm([
@@ -121,7 +122,7 @@ class ContractTest extends TestCase
         $contract = Contract::factory()->create(['customer_id' => $customer->getKey()]);
         $workflow = app(ContractWorkflow::class);
 
-        $contract = $workflow->sendForSignature($contract, $this->sales);
+        $contract = $workflow->sendForSignature($contract, $this->accountant);
         $this->assertSame(ContractStatus::PendingSignature, $contract->status);
 
         $contract = $workflow->activate($contract, $this->director, today()->subDay());
@@ -138,7 +139,7 @@ class ContractTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(ContractWorkflow::class)->activate($contract, $this->sales);
+        app(ContractWorkflow::class)->activate($contract, $this->accountant);
     }
 
     public function test_contract_without_value_cannot_be_sent_for_signature(): void
@@ -147,7 +148,7 @@ class ContractTest extends TestCase
 
         $this->expectException(WorkflowException::class);
 
-        app(ContractWorkflow::class)->sendForSignature($contract, $this->sales);
+        app(ContractWorkflow::class)->sendForSignature($contract, $this->accountant);
     }
 
     public function test_invalid_status_changes_are_rejected(): void
@@ -160,27 +161,27 @@ class ContractTest extends TestCase
         app(ContractWorkflow::class)->activate($contract, $this->director);
     }
 
-    public function test_contract_with_open_projects_cannot_be_completed_or_cancelled(): void
+    public function test_contract_with_open_tasks_cannot_be_completed_or_cancelled(): void
     {
         $contract = $this->makeActiveContract();
-        $project = Project::factory()->create(['contract_id' => $contract->getKey()]);
+        $task = Task::factory()->create(['contract_id' => $contract->getKey()]);
         $workflow = app(ContractWorkflow::class);
 
         try {
             $workflow->complete($contract, $this->director);
-            $this->fail('Hợp đồng còn dự án đang mở không được hoàn thành.');
+            $this->fail('Hợp đồng còn công việc đang mở không được hoàn thành.');
         } catch (WorkflowException) {
             $this->assertSame(ContractStatus::Active, $contract->refresh()->status);
         }
 
         try {
             $workflow->cancel($contract, $this->director, 'Khách hàng dừng hợp tác.');
-            $this->fail('Hợp đồng còn dự án đang mở không được huỷ.');
+            $this->fail('Hợp đồng còn công việc đang mở không được huỷ.');
         } catch (WorkflowException) {
             $this->assertSame(ContractStatus::Active, $contract->refresh()->status);
         }
 
-        $project->forceFill(['status' => 'cancelled'])->save();
+        $task->update(['status' => TaskStatus::Done]);
 
         $this->assertSame(ContractStatus::Completed, $workflow->complete($contract, $this->director)->status);
     }
@@ -191,13 +192,13 @@ class ContractTest extends TestCase
         $workflow = app(ContractWorkflow::class);
 
         try {
-            $workflow->cancel($contract, $this->sales, '   ');
+            $workflow->cancel($contract, $this->accountant, '   ');
             $this->fail('Huỷ hợp đồng phải có lý do.');
         } catch (WorkflowException) {
             $this->assertSame(ContractStatus::Draft, $contract->refresh()->status);
         }
 
-        $contract = $workflow->cancel($contract, $this->sales, 'Khách hàng đổi kế hoạch.');
+        $contract = $workflow->cancel($contract, $this->accountant, 'Khách hàng đổi kế hoạch.');
 
         $this->assertSame(ContractStatus::Cancelled, $contract->status);
         $this->assertSame('Khách hàng đổi kế hoạch.', $contract->cancel_reason);
@@ -207,7 +208,7 @@ class ContractTest extends TestCase
     {
         $contract = Contract::factory()->pendingSignature()->create();
 
-        $this->actingAs($this->sales)
+        $this->actingAs($this->accountant)
             ->get(ContractResource::getUrl('edit', ['record' => $contract]))
             ->assertForbidden();
 
@@ -221,17 +222,16 @@ class ContractTest extends TestCase
     {
         $contract = Contract::factory()->create();
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->accountant);
 
         Livewire::test(ViewContract::class, ['record' => $contract->getRouteKey()])
             ->assertActionVisible('sendForSignature')
             ->assertActionHidden('activate')
-            ->assertActionHidden('createProject')
             ->callAction('sendForSignature');
 
         $this->assertSame(ContractStatus::PendingSignature, $contract->refresh()->status);
 
-        // Sales không xác nhận hiệu lực được; Giám đốc thì được.
+        // Kế toán không xác nhận hiệu lực được; Giám đốc thì được.
         Livewire::test(ViewContract::class, ['record' => $contract->getRouteKey()])
             ->assertActionHidden('activate');
 
@@ -249,7 +249,7 @@ class ContractTest extends TestCase
     {
         $contract = Contract::factory()->create();
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->accountant);
 
         $this->get(ContractResource::getUrl('index'))->assertOk()->assertSee($contract->code);
         $this->get(ContractResource::getUrl('create'))->assertOk();

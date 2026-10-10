@@ -4,20 +4,18 @@ namespace Tests\Feature;
 
 use App\Enums\SystemRole;
 use App\Enums\TaskStatus;
-use App\Filament\Resources\Projects\Pages\ProjectBoard;
 use App\Filament\Resources\Tasks\Pages\ManageTasks;
+use App\Filament\Resources\Tasks\Pages\TaskBoard;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Tests\Concerns\BuildsProjects;
 use Tests\TestCase;
 
 class TaskTest extends TestCase
 {
-    use BuildsProjects;
     use RefreshDatabase;
 
     private User $pm;
@@ -34,34 +32,24 @@ class TaskTest extends TestCase
         $this->employee = $this->createUserWithRole(SystemRole::Employee);
     }
 
-    public function test_project_progress_is_the_average_of_its_active_tasks(): void
+    public function test_finishing_a_task_sets_progress_and_new_tasks_go_to_the_end_of_their_column(): void
     {
-        $project = $this->makeProject();
+        $first = Task::factory()->create(['progress' => 50]);
+        $second = Task::factory()->create();
 
-        $first = Task::factory()->create(['project_id' => $project->getKey(), 'progress' => 50]);
-        Task::factory()->create(['project_id' => $project->getKey(), 'progress' => 0]);
-        $cancelled = Task::factory()->create(['project_id' => $project->getKey(), 'status' => TaskStatus::Cancelled, 'progress' => 0]);
-
-        // (50 + 0) / 2 — công việc đã huỷ không tính.
-        $this->assertSame(25, $project->refresh()->progress);
+        $this->assertSame(1, $first->refresh()->sort_order);
+        $this->assertSame(2, $second->refresh()->sort_order);
 
         // Hoàn thành thì tiến độ công việc tự là 100%.
         $first->update(['status' => TaskStatus::Done]);
 
         $this->assertSame(100, $first->refresh()->progress);
-        $this->assertSame(50, $project->refresh()->progress);
-
-        $cancelled->delete();
-        Task::query()->where('project_id', $project->getKey())->where('progress', 0)->first()->delete();
-
-        $this->assertSame(100, $project->refresh()->progress);
     }
 
     public function test_employee_sees_and_updates_only_assigned_tasks(): void
     {
-        $project = $this->makeProject();
-        $mine = Task::factory()->create(['project_id' => $project->getKey(), 'assignee_id' => $this->employee->getKey(), 'name' => 'Việc của tôi ABC']);
-        $other = Task::factory()->create(['project_id' => $project->getKey(), 'assignee_id' => $this->pm->getKey(), 'name' => 'Việc của người khác XYZ']);
+        $mine = Task::factory()->create(['assignee_id' => $this->employee->getKey(), 'name' => 'Việc của tôi ABC']);
+        $other = Task::factory()->create(['assignee_id' => $this->pm->getKey(), 'name' => 'Việc của người khác XYZ']);
 
         $this->assertTrue($this->employee->can('update', $mine));
         $this->assertFalse($this->employee->can('view', $other));
@@ -91,13 +79,10 @@ class TaskTest extends TestCase
 
     public function test_pm_creates_a_task_from_the_task_screen(): void
     {
-        $project = $this->makeProject();
-
         $this->actingAs($this->pm);
 
         Livewire::test(ManageTasks::class)
             ->callAction('create', data: [
-                'project_id' => $project->getKey(),
                 'name' => 'Viết kịch bản',
                 'assignee_id' => $this->employee->getKey(),
                 'due_date' => today()->addWeek()->toDateString(),
@@ -111,19 +96,21 @@ class TaskTest extends TestCase
         $this->assertSame(TaskStatus::Todo, $task->status);
         $this->assertSame($this->employee->getKey(), $task->assignee_id);
         $this->assertSame('12.00', $task->estimated_hours);
+        $this->assertNull($task->contract_id);
     }
 
     public function test_dragging_a_card_on_the_board_changes_status_and_order(): void
     {
-        $project = $this->makeProject();
-        $a = Task::factory()->create(['project_id' => $project->getKey(), 'name' => 'Thẻ A']);
-        $b = Task::factory()->create(['project_id' => $project->getKey(), 'name' => 'Thẻ B', 'status' => TaskStatus::InProgress]);
-        $c = Task::factory()->create(['project_id' => $project->getKey(), 'name' => 'Thẻ C', 'status' => TaskStatus::InProgress]);
+        $a = Task::factory()->create(['name' => 'Thẻ A']);
+        $b = Task::factory()->create(['name' => 'Thẻ B', 'status' => TaskStatus::InProgress]);
+        $c = Task::factory()->create(['name' => 'Thẻ C', 'status' => TaskStatus::InProgress]);
 
         $this->actingAs($this->pm);
 
+        $this->get(TaskResource::getUrl('board'))->assertOk()->assertSee('Thẻ A');
+
         // Kéo thẻ A sang cột "Đang làm", thả vào giữa C và B.
-        Livewire::test(ProjectBoard::class, ['record' => $project->getRouteKey()])
+        Livewire::test(TaskBoard::class)
             ->assertSee('Thẻ A')
             ->call('moveTask', $a->getKey(), TaskStatus::InProgress->value, [$c->getKey(), $a->getKey(), $b->getKey()]);
 
@@ -134,38 +121,51 @@ class TaskTest extends TestCase
         );
 
         // Thả vào "Hoàn thành" thì tiến độ thành 100%.
-        Livewire::test(ProjectBoard::class, ['record' => $project->getRouteKey()])
+        Livewire::test(TaskBoard::class)
             ->call('moveTask', $a->getKey(), TaskStatus::Done->value, [$a->getKey()]);
 
         $this->assertSame(100, $a->refresh()->progress);
     }
 
-    public function test_board_ignores_moves_the_user_is_not_allowed_to_make(): void
+    public function test_board_shows_only_visible_tasks_and_ignores_moves_that_are_not_allowed(): void
     {
-        $project = $this->makeProject();
-        $project->memberships()->create(['user_id' => $this->employee->getKey()]);
-        $notMine = Task::factory()->create(['project_id' => $project->getKey(), 'assignee_id' => $this->pm->getKey()]);
-        $foreign = Task::factory()->create(); // công việc của dự án khác
+        $mine = Task::factory()->create(['assignee_id' => $this->employee->getKey(), 'name' => 'Thẻ của tôi']);
+        $notMine = Task::factory()->create(['assignee_id' => $this->pm->getKey(), 'name' => 'Thẻ của quản lý']);
+        // Việc hoàn thành đã lâu không còn nằm trên bảng.
+        $old = Task::factory()->create(['assignee_id' => $this->employee->getKey(), 'name' => 'Thẻ đã xong từ lâu', 'status' => TaskStatus::Done]);
+        Task::query()->whereKey($old->getKey())->update(['updated_at' => now()->subDays(30)]);
 
         $this->actingAs($this->employee);
 
-        Livewire::test(ProjectBoard::class, ['record' => $project->getRouteKey()])
+        Livewire::test(TaskBoard::class)
+            ->assertSee('Thẻ của tôi')
+            ->assertDontSee('Thẻ của quản lý')
+            ->assertDontSee('Thẻ đã xong từ lâu')
             ->call('moveTask', $notMine->getKey(), TaskStatus::Done->value, [])
-            ->call('moveTask', $foreign->getKey(), TaskStatus::Done->value, [])
-            ->call('moveTask', $notMine->getKey(), 'khong-hop-le', []);
+            ->call('moveTask', $mine->getKey(), 'khong-hop-le', [])
+            ->call('moveTask', $mine->getKey(), TaskStatus::Cancelled->value, []);
 
         $this->assertSame(TaskStatus::Todo, $notMine->refresh()->status);
-        $this->assertSame(TaskStatus::Todo, $foreign->refresh()->status);
+        $this->assertSame(TaskStatus::Todo, $mine->refresh()->status);
+
+        // Quản lý lọc "Việc tôi phụ trách".
+        $this->actingAs($this->pm);
+
+        Livewire::test(TaskBoard::class)
+            ->assertSee('Thẻ của tôi')
+            ->assertSee('Thẻ của quản lý')
+            ->call('setScope', 'mine')
+            ->assertDontSee('Thẻ của tôi')
+            ->assertSee('Thẻ của quản lý');
     }
 
     public function test_task_card_can_be_edited_from_the_board(): void
     {
-        $project = $this->makeProject();
-        $task = Task::factory()->create(['project_id' => $project->getKey(), 'name' => 'Dựng phim']);
+        $task = Task::factory()->create(['name' => 'Dựng phim']);
 
         $this->actingAs($this->pm);
 
-        Livewire::test(ProjectBoard::class, ['record' => $project->getRouteKey()])
+        Livewire::test(TaskBoard::class)
             ->callAction(TestAction::make('editTask')->arguments(['task' => $task->getKey()]), [
                 'name' => 'Dựng phim bản 2',
                 'status' => TaskStatus::Review->value,

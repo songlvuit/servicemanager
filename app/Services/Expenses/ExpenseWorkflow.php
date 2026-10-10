@@ -51,8 +51,8 @@ class ExpenseWorkflow extends StatusWorkflow
                 throw new WorkflowException('Số tiền đề nghị chi phải lớn hơn 0.');
             }
 
-            if ($expense->project?->isClosed()) {
-                throw new WorkflowException('Dự án đã hoàn thành hoặc đã huỷ nên không nhận thêm đề nghị chi.');
+            if ($expense->task?->isCancelled()) {
+                throw new WorkflowException('Công việc đã huỷ nên không nhận thêm đề nghị chi.');
             }
 
             $request = $this->approvals->start(

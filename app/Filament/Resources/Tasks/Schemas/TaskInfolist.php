@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\Tasks\Schemas;
 
 use App\Filament\Pages\WorkCalendar;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Support\Access;
 use App\Filament\Support\Columns;
+use App\Filament\Support\ContractLink;
 use App\Models\Task;
 use App\Support\Money;
 use Filament\Infolists\Components\TextEntry;
@@ -25,7 +25,7 @@ class TaskInfolist
     public static function configure(Schema $schema): Schema
     {
         return $schema
-            ->components([
+            ->components(array_values(array_filter([
                 Callout::make('Vượt ngân sách')
                     ->description(fn (Task $record): string => 'Chi phí thực tế '.Money::format($record->actual_cost)
                         .' đã vượt ngân sách '.Money::format($record->budget).'.')
@@ -35,7 +35,7 @@ class TaskInfolist
 
                 Section::make('Tiền & ngân sách')
                     ->icon(Heroicon::OutlinedBanknotes)
-                    ->description('Số trước thuế, tính từ đề nghị chi, mua hàng và giờ công gắn vào công việc này.')
+                    ->description('Số trước thuế, tính từ đề nghị chi, mua hàng và giờ công gắn vào công việc này và các công việc con của nó.')
                     ->columns(['default' => 2, 'lg' => 4])
                     ->columnSpanFull()
                     ->visible(fn (): bool => Access::canSeeCosts())
@@ -58,6 +58,9 @@ class TaskInfolist
                             ->weight(FontWeight::SemiBold)
                             ->color(fn (Task $record): string => $record->isOverBudget() ? 'danger' : 'success'),
                     ]),
+
+                // Chỉ có trên trang của người được xem hợp đồng / báo giá.
+                ContractLink::infolistSection(),
 
                 Section::make('Lịch làm việc')
                     ->icon(Heroicon::OutlinedCalendarDays)
@@ -89,7 +92,7 @@ class TaskInfolist
                             ->placeholder('—'),
                         TextEntry::make('customer_name')
                             ->label('Khách hàng')
-                            ->state(fn (Task $record): ?string => $record->project?->customer?->name ?? $record->customer?->name)
+                            ->state(fn (Task $record): ?string => $record->customer?->name)
                             ->placeholder('—'),
                         TextEntry::make('equipment')
                             ->label('Thiết bị')
@@ -102,12 +105,6 @@ class TaskInfolist
                     ->columns(['default' => 2, 'lg' => 4])
                     ->columnSpanFull()
                     ->schema([
-                        TextEntry::make('project.name')
-                            ->label('Dự án')
-                            ->placeholder('Việc độc lập')
-                            ->url(fn (Task $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
-                                ? ProjectResource::getUrl('view', ['record' => $record->project])
-                                : null),
                         TextEntry::make('assignee.name')
                             ->label('Người phụ trách')
                             ->placeholder('Chưa giao'),
@@ -141,6 +138,6 @@ class TaskInfolist
                             ->placeholder('—')
                             ->columnSpanFull(),
                     ]),
-            ]);
+            ])));
     }
 }

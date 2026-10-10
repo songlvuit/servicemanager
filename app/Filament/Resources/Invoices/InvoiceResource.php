@@ -102,11 +102,6 @@ class InvoiceResource extends Resource
                     ->relationship('customer', 'name')
                     ->searchable()
                     ->preload(),
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
-                    ->searchable()
-                    ->preload(),
                 Filters::dateRange('invoice_date', 'Ngày hóa đơn'),
                 TrashedFilter::make(),
             ])

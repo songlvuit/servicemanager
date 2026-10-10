@@ -47,7 +47,7 @@ class UserForm
                             ->label('Đơn giá giờ công')
                             ->default(0)
                             ->suffix('₫ / giờ')
-                            ->helperText('Dùng để tính chi phí nhân sự của dự án từ chấm công. Để 0 nếu không tính.'),
+                            ->helperText('Dùng để tính chi phí nhân sự của công việc từ chấm công. Để 0 nếu không tính.'),
                     ]),
 
                 Section::make('Mật khẩu')

@@ -5,11 +5,11 @@ namespace Tests\Feature;
 use App\Enums\ExpenseStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\SystemRole;
+use App\Enums\TaskStatus;
 use App\Exceptions\WorkflowException;
 use App\Models\Expense;
-use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
-use App\Services\Projects\ProjectWorkflow;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsExpenses;
@@ -186,7 +186,7 @@ class ExpenseWorkflowTest extends TestCase
         $workflow->pay($expense, $this->accountant, PaymentMethod::Cash);
     }
 
-    public function test_expense_cannot_be_submitted_without_amount_or_for_a_closed_project(): void
+    public function test_expense_cannot_be_submitted_without_amount_or_for_a_cancelled_task(): void
     {
         $workflow = $this->expenseWorkflow();
 
@@ -197,9 +197,9 @@ class ExpenseWorkflowTest extends TestCase
             $this->assertStringContainsString('lớn hơn 0', $exception->getMessage());
         }
 
-        $project = Project::factory()->create();
-        $expense = $this->makeExpense($project);
-        app(ProjectWorkflow::class)->cancel($project, $this->pm);
+        $task = Task::factory()->create();
+        $expense = $this->makeExpense($task);
+        $task->update(['status' => TaskStatus::Cancelled]);
 
         $this->expectException(WorkflowException::class);
 
@@ -230,8 +230,9 @@ class ExpenseWorkflowTest extends TestCase
         $mine = $this->makeExpense();
         $other = $this->makeExpense(employee: $this->createUserWithRole(SystemRole::Employee));
 
-        $managedProject = Project::factory()->create(['project_manager_id' => $this->employee->getKey()]);
-        $managed = $this->makeExpense($managedProject, $this->pm);
+        // Khoản chi của người khác nhưng gắn vào công việc mình phụ trách.
+        $assigned = Task::factory()->create(['assignee_id' => $this->employee->getKey()]);
+        $managed = $this->makeExpense($assigned, $this->pm);
 
         $visible = Expense::query()->visibleTo($this->employee)->pluck('id')->all();
 

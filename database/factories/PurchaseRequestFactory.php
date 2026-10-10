@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Enums\BudgetCategory;
-use App\Models\Project;
 use App\Models\PurchaseRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -21,7 +20,6 @@ class PurchaseRequestFactory extends Factory
     public function definition(): array
     {
         return [
-            'project_id' => Project::factory(),
             'requester_id' => User::factory(),
             'category' => BudgetCategory::Equipment,
             'description' => 'Yêu cầu mua '.fake()->unique()->numberBetween(1, 99999),

@@ -6,7 +6,7 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Đánh giá biên lợi nhuận của dự án (mục 37). Các ngưỡng nằm trong
+ * Đánh giá biên lợi nhuận của hợp đồng (mục 37). Các ngưỡng nằm trong
  * config/project.php và sửa được ở Hệ thống → Cấu hình:
  *
  *   > 30%   tốt
@@ -26,9 +26,9 @@ enum MarginBand: string implements HasColor, HasLabel
         $margin = (float) $margin;
 
         return match (true) {
-            $margin < (float) config('project.margin_danger', 10) => self::Danger,
-            $margin < (float) config('project.margin_warning', 20) => self::Warning,
-            $margin <= (float) config('project.margin_good', 30) => self::Normal,
+            $margin < (float) config('job.margin_danger', 10) => self::Danger,
+            $margin < (float) config('job.margin_warning', 20) => self::Warning,
+            $margin <= (float) config('job.margin_good', 30) => self::Normal,
             default => self::Good,
         };
     }

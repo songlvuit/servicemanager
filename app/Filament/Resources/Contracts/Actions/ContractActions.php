@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Contracts\Actions;
 
 use App\Enums\ContractStatus;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Support\WorkflowAction;
 use App\Models\Contract;
 use App\Services\Contracts\ContractWorkflow;
@@ -39,7 +38,7 @@ class ContractActions
             ->icon(Heroicon::OutlinedCheckBadge)
             ->color('success')
             ->modalHeading(fn (Contract $record): string => "Xác nhận hợp đồng {$record->code} đã ký?")
-            ->modalDescription(fn (Contract $record): string => 'Bạn có chắc chắn hợp đồng trị giá '.Money::format($record->total_value).' đã được hai bên ký? Sau bước này mới tạo được dự án.')
+            ->modalDescription(fn (Contract $record): string => 'Bạn có chắc chắn hợp đồng trị giá '.Money::format($record->total_value).' đã được hai bên ký?')
             ->schema([
                 DatePicker::make('sign_date')
                     ->label('Ngày ký')
@@ -76,7 +75,7 @@ class ContractActions
             ->icon(Heroicon::OutlinedFlag)
             ->color('info')
             ->modalHeading(fn (Contract $record): string => "Hoàn thành hợp đồng {$record->code}?")
-            ->modalDescription('Chỉ thực hiện khi mọi dự án của hợp đồng đã kết thúc. Thao tác này không hoàn tác được.')
+            ->modalDescription('Chỉ thực hiện khi mọi công việc của hợp đồng đã kết thúc. Thao tác này không hoàn tác được.')
             ->action(fn (Contract $record) => WorkflowAction::run(
                 $record,
                 fn () => app(ContractWorkflow::class)->complete($record, auth()->user()),
@@ -103,18 +102,5 @@ class ContractActions
                 fn () => app(ContractWorkflow::class)->cancel($record, auth()->user(), (string) ($data['reason'] ?? '')),
                 'Đã huỷ hợp đồng.',
             ));
-    }
-
-    /**
-     * Rule 1: chỉ hợp đồng đang hiệu lực mới tạo được dự án.
-     */
-    public static function createProject(): Action
-    {
-        return Action::make('createProject')
-            ->label('Tạo dự án')
-            ->icon(Heroicon::OutlinedBriefcase)
-            ->color('gray')
-            ->visible(fn (Contract $record): bool => ! $record->trashed() && $record->isActive() && ProjectResource::canCreate())
-            ->url(fn (Contract $record): string => ProjectResource::getUrl('create', ['contract' => $record->getKey()]));
     }
 }

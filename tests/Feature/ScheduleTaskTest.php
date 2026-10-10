@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\BudgetCategory;
-use App\Enums\ProjectStatus;
 use App\Enums\ScheduleStatus;
 use App\Enums\SystemRole;
 use App\Enums\TaskStatus;
@@ -42,7 +41,7 @@ use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Tests\Concerns\BuildsExpenses;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsSchedules;
 use Tests\TestCase;
 
@@ -55,7 +54,7 @@ use Tests\TestCase;
 class ScheduleTaskTest extends TestCase
 {
     use BuildsExpenses;
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsSchedules;
     use RefreshDatabase;
 
@@ -87,7 +86,6 @@ class ScheduleTaskTest extends TestCase
         $this->assertSame($task->getKey(), $entry->task_id);
         $this->assertTrue($task->from_schedule);
         $this->assertSame('Livestream hội thảo', $task->name);
-        $this->assertNull($task->project_id);
         // Người đầu tiên trong ê-kíp là người phụ trách.
         $this->assertSame($this->sang->getKey(), $task->assignee_id);
         $this->assertSame(TaskStatus::Todo, $task->status);
@@ -95,19 +93,13 @@ class ScheduleTaskTest extends TestCase
         $this->assertSame('2026-10-08', $task->due_date->toDateString());
         $this->assertSame('5000000.00', $task->budget);
 
-        // Lịch gắn dự án thì công việc thuộc dự án đó.
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-        $inProject = $this->schedule(['title' => 'Quay TVC', 'project_id' => $project->getKey()], [$this->quay]);
-
-        $this->assertSame($project->getKey(), $inProject->task->project_id);
-
         // Lịch nghỉ không tạo công việc.
         $leave = app(ScheduleManager::class)->registerLeave($this->quay, Carbon::parse('2026-10-12')->startOfDay(), Carbon::parse('2026-10-12')->endOfDay());
         $byPlanner = $this->schedule(['title' => 'Nghỉ: Sáng', 'schedule_type_id' => ScheduleType::leave()->getKey()], [$this->sang]);
 
         $this->assertNull($leave->task_id);
         $this->assertNull($byPlanner->task_id);
-        $this->assertSame(2, Task::query()->count());
+        $this->assertSame(1, Task::query()->count());
     }
 
     public function test_budget_from_the_schedule_needs_the_internal_cost_permission(): void
@@ -161,16 +153,14 @@ class ScheduleTaskTest extends TestCase
     public function test_a_schedule_can_join_an_existing_task_which_then_keeps_its_own_details(): void
     {
         $manager = app(ScheduleManager::class);
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-        $job = Task::factory()->create(['name' => 'TVC ra mắt sản phẩm', 'project_id' => $project->getKey(), 'budget' => 20000000]);
+        $job = Task::factory()->create(['name' => 'TVC ra mắt sản phẩm', 'budget' => 20000000]);
 
         $survey = $this->schedule(['title' => 'Khảo sát bối cảnh', 'task_id' => $job->getKey()], [$this->quay]);
         $shoot = $this->schedule(['title' => 'Quay chính', 'task_id' => $job->getKey()], [$this->quay, $this->sang]);
 
-        // Không tạo thêm công việc; lịch theo dự án của công việc.
+        // Không tạo thêm công việc.
         $this->assertSame(1, Task::query()->count());
         $this->assertSame([$job->getKey(), $job->getKey()], [$survey->task_id, $shoot->task_id]);
-        $this->assertSame($project->getKey(), $survey->project_id);
 
         // Đổi tên / huỷ một lịch không đụng tới công việc tạo tay.
         $manager->save($survey, [...$this->attributes(), 'title' => 'Khảo sát lại', 'status' => ScheduleStatus::Cancelled], [$this->quay->getKey()], $this->pm);
@@ -246,8 +236,7 @@ class ScheduleTaskTest extends TestCase
         $this->assertFalse($task->isOverBudget());
         $this->assertSame(TaskStatus::Done, $task->status);
 
-        // Việc độc lập: chi phí vẫn là chi phí chung, không vào dự án nào; dòng chi phí ghi rõ công việc.
-        $this->assertNull($paid->project_id);
+        // Việc không gắn hợp đồng: chi phí tính cho công việc, không vào hợp đồng nào; dòng chi phí ghi rõ công việc.
         $this->assertSame($task->getKey(), CostLine::query()->findOrFail('expense-'.$paid->getKey())->task_id);
         $this->assertSame('4800000.00', Decimal::round(CostLine::query()->where('task_id', $task->getKey())->sum('amount')));
 
@@ -259,54 +248,18 @@ class ScheduleTaskTest extends TestCase
         $this->assertSame('4500000.00', $task->refresh()->actual_cost);
 
         // Chuyển chứng từ sang công việc khác: cả hai công việc được tính lại.
-        $other = Task::factory()->create(['project_id' => null]);
+        $other = Task::factory()->create();
         $extra->update(['task_id' => $other->getKey()]);
 
         $this->assertSame('4200000.00', $task->refresh()->actual_cost);
         $this->assertSame('300000.00', $other->refresh()->actual_cost);
     }
 
-    public function test_documents_follow_the_project_of_their_task(): void
-    {
-        $from = $this->makeProject(['status' => ProjectStatus::Active]);
-        $to = $this->makeProject(['status' => ProjectStatus::Active]);
-        $manager = app(ScheduleManager::class);
-
-        $entry = $this->schedule(['title' => 'Quay TVC', 'project_id' => $from->getKey()], [$this->quay], '2026-10-06 08:00', '2026-10-06 12:00');
-        $task = $entry->task;
-
-        // Chứng từ gắn công việc luôn nhận dự án của công việc, dù form gửi gì.
-        $expense = $this->payExpense($this->makeExpenseFor($task, 1000000));
-        $request = PurchaseRequest::factory()->create(['project_id' => $to->getKey(), 'task_id' => $task->getKey(), 'requester_id' => $this->pm->getKey()]);
-        app(ScheduleTimesheets::class)->log($entry, $this->pm, 4);
-
-        $this->assertSame($from->getKey(), $expense->project_id);
-        $this->assertSame($from->getKey(), $request->project_id);
-        $this->assertSame('1600000.00', $from->refresh()->actual_cost);
-
-        // Đổi dự án của lịch: công việc, chứng từ và chi phí chuyển theo.
-        $entry = $manager->save($entry, [...$this->attributes('2026-10-06 08:00', '2026-10-06 12:00'), 'title' => 'Quay TVC', 'status' => ScheduleStatus::Done, 'project_id' => $to->getKey()], [$this->quay->getKey()], $this->pm);
-
-        $this->assertSame($to->getKey(), $task->refresh()->project_id);
-        $this->assertSame($to->getKey(), $expense->refresh()->project_id);
-        $this->assertSame($to->getKey(), Timesheet::query()->sole()->project_id);
-        $this->assertSame('0.00', $from->refresh()->actual_cost);
-        $this->assertSame('1600000.00', $to->refresh()->actual_cost);
-        $this->assertSame('1600000.00', $task->actual_cost);
-
-        // Gỡ dự án: thành việc độc lập, chi phí thành chi phí chung.
-        $manager->save($entry, [...$this->attributes('2026-10-06 08:00', '2026-10-06 12:00'), 'title' => 'Quay TVC', 'status' => ScheduleStatus::Done, 'project_id' => null], [$this->quay->getKey()], $this->pm);
-
-        $this->assertNull($task->refresh()->project_id);
-        $this->assertNull($expense->refresh()->project_id);
-        $this->assertSame('0.00', $to->refresh()->actual_cost);
-    }
-
     public function test_crew_members_see_the_task_and_can_charge_expenses_to_it(): void
     {
         $entry = $this->schedule(['title' => 'Livestream hội thảo', 'task_budget' => 5000000], [$this->quay, $this->sang]);
         $task = $entry->task;
-        $someoneElse = Task::factory()->create(['project_id' => null, 'name' => 'Việc của người khác']);
+        $someoneElse = Task::factory()->create(['name' => 'Việc của người khác']);
 
         // Sáng không phải người phụ trách nhưng có trong ê-kíp.
         $this->actingAs($this->sang);
@@ -317,7 +270,7 @@ class ScheduleTaskTest extends TestCase
 
         Livewire::withQueryParams(['task' => $task->getKey()])
             ->test(CreateExpense::class)
-            ->assertSchemaStateSet(['task_id' => $task->getKey(), 'project_id' => null])
+            ->assertSchemaStateSet(['task_id' => $task->getKey()])
             ->fillForm([
                 'category' => BudgetCategory::Travel->value,
                 'description' => 'Taxi chở thiết bị',
@@ -469,9 +422,7 @@ class ScheduleTaskTest extends TestCase
 
     public function test_backfill_creates_tasks_for_schedules_made_before_this_feature(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-
-        $past = $this->makeEntry('2026-10-05 08:00', '2026-10-05 12:00', [$this->quay], ['title' => 'Quay TVC', 'project_id' => $project->getKey()]);
+        $past = $this->makeEntry('2026-10-05 08:00', '2026-10-05 12:00', [$this->quay], ['title' => 'Quay TVC']);
         $future = $this->makeEntry('2026-10-09 08:00', '2026-10-09 12:00', [$this->sang], ['title' => 'Livestream']);
         $cancelled = $this->makeEntry('2026-10-09 13:00', '2026-10-09 17:00', [], ['title' => 'Khảo sát', 'status' => ScheduleStatus::Cancelled]);
         $leave = $this->makeEntry('2026-10-09 08:00', '2026-10-09 12:00', [$this->quay], ['schedule_type_id' => ScheduleType::leave()->getKey()]);
@@ -487,7 +438,6 @@ class ScheduleTaskTest extends TestCase
         $pastTask = $past->refresh()->task;
 
         $this->assertSame('Quay TVC', $pastTask->name);
-        $this->assertSame($project->getKey(), $pastTask->project_id);
         $this->assertSame(TaskStatus::Done, $pastTask->status);
         $this->assertSame($this->quay->getKey(), $pastTask->assignee_id);
         $this->assertSame($pastTask->getKey(), Timesheet::query()->sole()->task_id);
@@ -497,11 +447,10 @@ class ScheduleTaskTest extends TestCase
         $this->assertSame(TaskStatus::Todo, $future->refresh()->task->status);
         $this->assertSame(TaskStatus::Cancelled, $cancelled->refresh()->task->status);
         $this->assertNull($leave->refresh()->task_id);
-        $this->assertSame('600000.00', $project->refresh()->actual_cost);
     }
 
     /**
-     * Xếp một lịch qua ScheduleManager (như trang Lịch làm việc), do quản lý dự án thực hiện.
+     * Xếp một lịch qua ScheduleManager (như trang Lịch làm việc), do quản lý công việc thực hiện.
      *
      * @param  array<string, mixed>  $attributes
      * @param  list<User>  $crew
@@ -533,7 +482,6 @@ class ScheduleTaskTest extends TestCase
     private function makeExpenseFor(Task $task, int $amount = 1000000): Expense
     {
         return Expense::factory()->create([
-            'project_id' => null,
             'task_id' => $task->getKey(),
             'employee_id' => $this->quay->getKey(),
             'amount' => $amount,

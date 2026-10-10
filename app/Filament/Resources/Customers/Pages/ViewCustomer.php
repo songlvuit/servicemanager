@@ -14,7 +14,7 @@ use Illuminate\Contracts\Support\Htmlable;
 
 /**
  * Trang chi tiết khách hàng: tab "Tổng quan" cùng các tab Liên hệ, Cơ hội,
- * Báo giá, Hợp đồng, Dự án, Hóa đơn, Thanh toán, Tài liệu. Tab Hoạt động được
+ * Báo giá, Hợp đồng, Hóa đơn, Thanh toán, Tài liệu. Tab Hoạt động được
  * thêm cùng Audit Log (Phase 6).
  */
 class ViewCustomer extends ViewRecord

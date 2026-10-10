@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Enums\BudgetCategory;
 use App\Enums\ExpenseStatus;
 use App\Enums\PaymentMethod;
-use App\Models\Concerns\AffectsProjectCosts;
 use App\Models\Concerns\AffectsTaskCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasApprovals;
@@ -20,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Đề nghị chi (mục 20). `amount` là số trước thuế — tính vào chi phí dự án;
+ * Đề nghị chi (mục 20). `amount` là số trước thuế — tính vào chi phí công việc;
  * `total_amount` = amount + tax là số tiền chi ra, dùng để xét ngưỡng duyệt.
  * Trạng thái chỉ do App\Services\Expenses\ExpenseWorkflow ghi.
  */
@@ -30,7 +29,6 @@ class Expense extends Model
 
     public const AUDIT_NAME = 'Đề nghị chi';
 
-    use AffectsProjectCosts;
     use AffectsTaskCosts;
     use HasApprovals;
     use HasAttachments;
@@ -47,7 +45,6 @@ class Expense extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'project_id',
         'task_id',
         'category',
         'description',
@@ -114,7 +111,7 @@ class Expense extends Model
 
     /**
      * Đề nghị chi người dùng được xem: tất cả nếu có quyền "Xem tất cả", nếu
-     * không chỉ của mình và của các dự án mình quản lý.
+     * không chỉ của mình và của các công việc mình phụ trách.
      *
      * @param  Builder<Expense>  $query
      */
@@ -127,7 +124,7 @@ class Expense extends Model
         $query->where(function (Builder $query) use ($user): void {
             $query
                 ->where('employee_id', $user->getKey())
-                ->orWhereHas('project', fn (Builder $query) => $query->where('project_manager_id', $user->getKey()));
+                ->orWhereHas('task', fn (Builder $query) => $query->where('assignee_id', $user->getKey()));
         });
     }
 
@@ -135,15 +132,7 @@ class Expense extends Model
     {
         return $user->can('expenses.view_all')
             || $this->isOwnedBy($user)
-            || $this->project?->project_manager_id === $user->getKey();
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
+            || ($this->task_id !== null && $this->task?->assignee_id === $user->getKey());
     }
 
     /**

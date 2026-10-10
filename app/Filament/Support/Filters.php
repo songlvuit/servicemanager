@@ -13,14 +13,14 @@ use Illuminate\Support\Carbon;
 class Filters
 {
     /**
-     * Chỉ hiện những dòng KHÔNG gắn dự án (việc độc lập, chi phí chung).
+     * Chỉ hiện những dòng KHÔNG gắn công việc nào (chi phí chung của công ty).
      */
-    public static function withoutProject(string $label = 'Không gắn dự án'): Filter
+    public static function withoutTask(string $label = 'Chi phí chung (không gắn công việc)'): Filter
     {
-        return Filter::make('without_project')
+        return Filter::make('without_task')
             ->label($label)
             ->toggle()
-            ->query(fn (Builder $query): Builder => $query->whereNull($query->getModel()->qualifyColumn('project_id')));
+            ->query(fn (Builder $query): Builder => $query->whereNull($query->getModel()->qualifyColumn('task_id')));
     }
 
     /**

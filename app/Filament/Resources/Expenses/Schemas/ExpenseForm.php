@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Expenses\Schemas;
 use App\Enums\BudgetCategory;
 use App\Enums\PaymentMethod;
 use App\Enums\SupplierStatus;
-use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
 use App\Filament\Support\Fields;
 use App\Filament\Support\TaskField;
 use App\Models\Supplier;
@@ -18,7 +17,6 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
@@ -39,22 +37,12 @@ class ExpenseForm
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('project_id')
-                            ->label('Dự án')
-                            ->options(fn (): array => BudgetItemForm::projectOptions())
-                            // Điền sẵn khi mở từ trang dự án (?project=ID).
-                            ->default(fn (): ?int => (request()->integer('project') ?: null) ?? TaskField::requested()?->project_id)
-                            ->searchable()
-                            ->placeholder('Không gắn dự án')
-                            ->helperText('Bỏ trống nếu khoản chi không thuộc dự án nào: khi đó nó là chi phí chung của công ty.')
-                            ->live()
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null)),
                         TaskField::select(),
                         Select::make('category')
                             ->label('Nhóm chi phí')
                             ->options(BudgetCategory::class)
                             ->required()
-                            ->helperText('Nếu có gắn dự án, chi phí được tính vào dòng ngân sách cùng nhóm của dự án đó.'),
+                            ->helperText('Dùng để phân loại chi phí trong báo cáo.'),
                         TextInput::make('description')
                             ->label('Nội dung chi')
                             ->required()

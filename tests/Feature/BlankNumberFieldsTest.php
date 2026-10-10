@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ProjectStatus;
 use App\Enums\SystemRole;
 use App\Filament\Resources\ApprovalRules\Pages\ManageApprovalRules;
 use App\Filament\Resources\PurchaseOrders\Pages\CreatePurchaseOrder;
@@ -24,7 +23,7 @@ use Filament\Forms\Components\Repeater;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 /**
@@ -34,7 +33,7 @@ use Tests\TestCase;
  */
 class BlankNumberFieldsTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     private User $admin;
@@ -107,11 +106,8 @@ class BlankNumberFieldsTest extends TestCase
 
     public function test_task_can_be_saved_with_blank_hours_and_progress(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-
         Livewire::test(ManageTasks::class)
             ->callAction('create', data: [
-                'project_id' => $project->getKey(),
                 'name' => 'Viết kịch bản',
                 'estimated_hours' => null,
                 'progress' => null,
@@ -161,11 +157,9 @@ class BlankNumberFieldsTest extends TestCase
     public function test_purchase_order_item_can_be_saved_with_a_blank_tax_rate(): void
     {
         $undoRepeaterFake = Repeater::fake();
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-
         Livewire::test(CreatePurchaseOrder::class)
             ->fillForm([
-                'project_id' => $project->getKey(),
+                'task_id' => $this->makeJob()->getKey(),
                 'supplier_id' => Supplier::factory()->create()->getKey(),
                 'items' => [
                     ['description' => 'Thuê máy quay', 'quantity' => 1, 'unit_price' => 3000000, 'tax_rate' => null],

@@ -40,8 +40,8 @@ class PurchaseRequestWorkflow extends StatusWorkflow
                 throw new WorkflowException('Giá trị yêu cầu mua hàng phải lớn hơn 0.');
             }
 
-            if ($purchaseRequest->project?->isClosed()) {
-                throw new WorkflowException('Dự án đã hoàn thành hoặc đã huỷ nên không nhận thêm yêu cầu mua hàng.');
+            if ($purchaseRequest->task?->isCancelled()) {
+                throw new WorkflowException('Công việc đã huỷ nên không nhận thêm yêu cầu mua hàng.');
             }
 
             $request = $this->approvals->start(

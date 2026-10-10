@@ -77,12 +77,12 @@ return new class extends Migration
 
         DB::table('approval_rules')->insert([
             // Đề nghị chi: PM → Kế toán; từ 5 triệu thêm cấp quản lý; trên 20 triệu thêm Giám đốc.
-            $rule('Quản lý dự án duyệt', 'expense', 0, null, 'Project Manager', 10),
+            $rule('Quản lý công việc duyệt', 'expense', 0, null, 'Project Manager', 10),
             $rule('Kế toán kiểm tra', 'expense', 0, null, 'Accountant', 20),
             $rule('Quản lý duyệt (5 – 20 triệu)', 'expense', 5000000, 20000000, 'Director', 30),
             $rule('Giám đốc duyệt (trên 20 triệu)', 'expense', '20000000.01', null, 'Director', 30),
             // Yêu cầu mua hàng: PM → Kế toán kiểm tra ngân sách; trên 20 triệu thêm Giám đốc.
-            $rule('Quản lý dự án duyệt', 'purchase_request', 0, null, 'Project Manager', 10),
+            $rule('Quản lý công việc duyệt', 'purchase_request', 0, null, 'Project Manager', 10),
             $rule('Kế toán kiểm tra ngân sách', 'purchase_request', 0, null, 'Accountant', 20),
             $rule('Giám đốc duyệt (trên 20 triệu)', 'purchase_request', '20000000.01', null, 'Director', 30),
         ]);

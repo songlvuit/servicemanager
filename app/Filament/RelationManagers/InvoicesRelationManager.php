@@ -8,7 +8,6 @@ use App\Filament\Support\Columns;
 use App\Models\Contract;
 use App\Models\Customer;
 use App\Models\Invoice;
-use App\Models\Project;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -18,7 +17,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Tab "Hóa đơn" dùng chung cho khách hàng, hợp đồng và dự án (chỉ xem; bấm
+ * Tab "Hóa đơn" dùng chung cho khách hàng và hợp đồng (chỉ xem; bấm
  * vào dòng để mở hóa đơn).
  */
 class InvoicesRelationManager extends RelationManager
@@ -83,7 +82,6 @@ class InvoicesRelationManager extends RelationManager
         $owner = $this->getOwnerRecord();
 
         return match (true) {
-            $owner instanceof Project => ['project' => $owner->getKey()],
             $owner instanceof Contract => ['contract' => $owner->getKey()],
             $owner instanceof Customer => ['customer' => $owner->getKey()],
             default => [],

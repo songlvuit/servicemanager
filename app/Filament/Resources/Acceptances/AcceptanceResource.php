@@ -3,17 +3,18 @@
 namespace App\Filament\Resources\Acceptances;
 
 use App\Enums\AcceptanceStatus;
+use App\Enums\ContractStatus;
 use App\Filament\RelationManagers\AttachmentsRelationManager;
 use App\Filament\Resources\Acceptances\Pages\CreateAcceptance;
 use App\Filament\Resources\Acceptances\Pages\EditAcceptance;
 use App\Filament\Resources\Acceptances\Pages\ListAcceptances;
 use App\Filament\Resources\Acceptances\Pages\ViewAcceptance;
-use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
-use App\Filament\Resources\Projects\ProjectResource;
+use App\Filament\Resources\Contracts\ContractResource;
 use App\Filament\Support\Columns;
 use App\Filament\Support\Fields;
 use App\Filament\Support\VietnameseLabels;
 use App\Models\Acceptance;
+use App\Models\Contract;
 use BackedEnum;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
@@ -26,6 +27,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
@@ -37,7 +39,7 @@ use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 /**
- * Nghiệm thu (mục 29): biên bản nghiệm thu của dự án, căn cứ để lập hóa đơn.
+ * Nghiệm thu (mục 29): biên bản nghiệm thu của hợp đồng, căn cứ để lập hóa đơn.
  */
 class AcceptanceResource extends Resource
 {
@@ -49,11 +51,11 @@ class AcceptanceResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Tài chính';
 
     protected static ?string $navigationLabel = 'Nghiệm thu';
 
-    protected static ?int $navigationSort = 70;
+    protected static ?int $navigationSort = 5;
 
     protected static ?string $modelLabel = 'biên bản nghiệm thu';
 
@@ -71,12 +73,13 @@ class AcceptanceResource extends Resource
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('project_id')
-                            ->label('Dự án')
-                            ->options(fn (): array => BudgetItemForm::projectOptions())
-                            ->default(fn (): ?int => request()->integer('project') ?: null)
+                        Select::make('contract_id')
+                            ->label('Hợp đồng')
+                            ->options(fn (Get $get): array => static::contractOptions($get('contract_id')))
+                            ->default(fn (): ?int => request()->integer('contract') ?: null)
                             ->searchable()
-                            ->required(),
+                            ->required()
+                            ->helperText('Hợp đồng đang hiệu lực hoặc đã hoàn thành.'),
                         DatePicker::make('acceptance_date')
                             ->label('Ngày nghiệm thu')
                             ->default(fn (): string => today()->toDateString())
@@ -126,12 +129,12 @@ class AcceptanceResource extends Resource
                         TextEntry::make('acceptance_date')
                             ->label('Ngày nghiệm thu')
                             ->date(),
-                        TextEntry::make('project.name')
-                            ->label('Dự án')
-                            ->url(fn (Acceptance $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
-                                ? ProjectResource::getUrl('view', ['record' => $record->project])
+                        TextEntry::make('contract.code')
+                            ->label('Hợp đồng')
+                            ->url(fn (Acceptance $record): ?string => $record->contract !== null && ContractResource::canView($record->contract)
+                                ? ContractResource::getUrl('view', ['record' => $record->contract])
                                 : null),
-                        TextEntry::make('project.customer.name')
+                        TextEntry::make('contract.customer.name')
                             ->label('Khách hàng'),
                         Columns::moneyEntry('amount', 'Giá trị nghiệm thu (trước thuế)')
                             ->weight(FontWeight::SemiBold),
@@ -174,7 +177,7 @@ class AcceptanceResource extends Resource
                 Columns::code(label: 'Số biên bản'),
                 TextColumn::make('description')
                     ->label('Nội dung nghiệm thu')
-                    ->description(fn (Acceptance $record): ?string => $record->project?->name)
+                    ->description(fn (Acceptance $record): ?string => $record->contract ? $record->contract->code.' · '.$record->contract->customer?->name : null)
                     ->wrap()
                     ->searchable(),
                 TextColumn::make('acceptance_date')
@@ -191,9 +194,9 @@ class AcceptanceResource extends Resource
                     ->label('Trạng thái')
                     ->options(AcceptanceStatus::class)
                     ->multiple(),
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
+                SelectFilter::make('contract_id')
+                    ->label('Hợp đồng')
+                    ->relationship('contract', 'code')
                     ->searchable()
                     ->preload(),
             ])
@@ -204,7 +207,7 @@ class AcceptanceResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('Chưa có biên bản nghiệm thu nào.')
-            ->emptyStateDescription('Lập biên bản nghiệm thu khi bàn giao một phần hoặc toàn bộ dự án cho khách hàng.')
+            ->emptyStateDescription('Lập biên bản nghiệm thu khi bàn giao một phần hoặc toàn bộ hợp đồng cho khách hàng.')
             ->emptyStateActions([
                 CreateAction::make()
                     ->label('+ Tạo biên bản nghiệm thu'),
@@ -230,7 +233,7 @@ class AcceptanceResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['project.customer']);
+        return parent::getEloquentQuery()->with(['contract.customer']);
     }
 
     /**
@@ -244,5 +247,28 @@ class AcceptanceResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return $record instanceof Acceptance && $record->isEditable() && parent::canDelete($record);
+    }
+
+    /**
+     * Hợp đồng nghiệm thu được: đang hiệu lực hoặc đã hoàn thành (kèm hợp đồng đang chọn).
+     *
+     * @return array<int, string>
+     */
+    private static function contractOptions(mixed $selected = null): array
+    {
+        return Contract::query()
+            ->with('customer')
+            ->where(function (Builder $query) use ($selected): void {
+                $query->whereIn('status', [ContractStatus::Active->value, ContractStatus::Completed->value]);
+
+                if (filled($selected)) {
+                    $query->orWhere('id', $selected);
+                }
+            })
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get()
+            ->mapWithKeys(fn (Contract $contract): array => [$contract->getKey() => "{$contract->code} — {$contract->title} ({$contract->customer?->name})"])
+            ->all();
     }
 }

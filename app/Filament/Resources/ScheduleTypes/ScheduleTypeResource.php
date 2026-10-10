@@ -74,7 +74,7 @@ class ScheduleTypeResource extends Resource
                     ->required(),
                 Toggle::make('is_leave')
                     ->label('Là lịch nghỉ / bận')
-                    ->helperText('Lịch thuộc loại này không phải việc của khách: không gắn dự án, hiện thành dải "Nghỉ" trên lịch, và nút "Đăng ký nghỉ" dùng loại này.')
+                    ->helperText('Lịch thuộc loại này không phải việc của khách: không tạo công việc, hiện thành dải "Nghỉ" trên lịch, và nút "Đăng ký nghỉ" dùng loại này.')
                     ->columnSpanFull(),
                 Toggle::make('is_active')
                     ->label('Đang dùng')

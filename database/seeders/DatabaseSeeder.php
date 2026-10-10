@@ -17,7 +17,7 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             DevUserSeeder::class,
             DemoDataSeeder::class,
-            DemoProjectsSeeder::class,
+            DemoContractsSeeder::class,
             DemoOperationsSeeder::class,
             DemoBillingSeeder::class,
             DemoScheduleSeeder::class,

@@ -7,7 +7,6 @@ use App\Enums\ContractStatus;
 use App\Filament\Support\Fields;
 use App\Models\Acceptance;
 use App\Models\Contract;
-use App\Models\Project;
 use App\Support\Decimal;
 use App\Support\Money;
 use Filament\Forms\Components\DatePicker;
@@ -26,8 +25,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
 
 /**
- * Form hóa đơn. Mở từ biên bản nghiệm thu (?acceptance=ID), dự án
- * (?project=ID) hoặc hợp đồng (?contract=ID) thì các ô liên quan được điền sẵn.
+ * Form hóa đơn. Mở từ biên bản nghiệm thu (?acceptance=ID) hoặc hợp đồng
+ * (?contract=ID) thì các ô liên quan được điền sẵn.
  * Thuế, tổng tiền và số còn phải thu được tính lại ở server khi lưu.
  */
 class InvoiceForm
@@ -56,7 +55,6 @@ class InvoiceForm
                             ->live()
                             ->afterStateUpdated(function (Set $set): void {
                                 $set('contract_id', null);
-                                $set('project_id', null);
                                 $set('acceptance_id', null);
                             }),
                         Select::make('contract_id')
@@ -67,26 +65,14 @@ class InvoiceForm
                             ->searchable()
                             ->required()
                             ->live()
-                            ->afterStateUpdated(function (Set $set): void {
-                                $set('project_id', null);
-                                $set('acceptance_id', null);
-                            })
+                            ->afterStateUpdated(fn (Set $set): mixed => $set('acceptance_id', null))
                             ->helperText('Hợp đồng đang hiệu lực hoặc đã hoàn thành của khách hàng đã chọn.'),
-                        Select::make('project_id')
-                            ->label('Dự án')
-                            ->options(fn (Get $get): array => static::projectOptions($get('contract_id')))
-                            ->default(fn (): ?int => static::source()['project_id'])
-                            ->rule(fn (Get $get): Exists => Rule::exists('projects', 'id')->where('contract_id', $get('contract_id')))
-                            ->searchable()
-                            ->placeholder('Không gắn với dự án nào')
-                            ->live()
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('acceptance_id', null)),
                         Select::make('acceptance_id')
                             ->label('Biên bản nghiệm thu')
-                            ->options(fn (Get $get): array => static::acceptanceOptions($get('project_id')))
+                            ->options(fn (Get $get): array => static::acceptanceOptions($get('contract_id')))
                             ->default(fn (): ?int => static::source()['acceptance_id'])
                             ->rule(fn (Get $get): Exists => Rule::exists('acceptances', 'id')
-                                ->where('project_id', $get('project_id'))
+                                ->where('contract_id', $get('contract_id'))
                                 ->where('status', AcceptanceStatus::Approved->value))
                             ->searchable()
                             ->placeholder('Không gắn với biên bản nào')
@@ -161,36 +147,24 @@ class InvoiceForm
     }
 
     /**
-     * Giá trị điền sẵn khi form được mở từ biên bản nghiệm thu, dự án hoặc hợp đồng.
+     * Giá trị điền sẵn khi form được mở từ biên bản nghiệm thu hoặc hợp đồng.
      *
-     * @return array{customer_id: ?int, contract_id: ?int, project_id: ?int, acceptance_id: ?int, description: ?string, subtotal: ?string}
+     * @return array{customer_id: ?int, contract_id: ?int, acceptance_id: ?int, description: ?string, subtotal: ?string}
      */
     private static function source(): array
     {
-        $empty = ['customer_id' => null, 'contract_id' => null, 'project_id' => null, 'acceptance_id' => null, 'description' => null, 'subtotal' => null];
+        $empty = ['customer_id' => null, 'contract_id' => null, 'acceptance_id' => null, 'description' => null, 'subtotal' => null];
 
         if (($id = request()->integer('acceptance')) > 0) {
-            $acceptance = Acceptance::query()->with('project')->whereKey($id)->where('status', AcceptanceStatus::Approved->value)->first();
-            $project = $acceptance?->project;
+            $acceptance = Acceptance::query()->with('contract')->whereKey($id)->where('status', AcceptanceStatus::Approved->value)->first();
+            $contract = $acceptance?->contract;
 
-            return $project === null ? $empty : [
-                'customer_id' => $project->customer_id,
-                'contract_id' => $project->contract_id,
-                'project_id' => $project->getKey(),
+            return $contract === null ? $empty : [
+                'customer_id' => $contract->customer_id,
+                'contract_id' => $contract->getKey(),
                 'acceptance_id' => $acceptance->getKey(),
                 'description' => $acceptance->description,
                 'subtotal' => Decimal::trimZeros($acceptance->amount),
-            ];
-        }
-
-        if (($id = request()->integer('project')) > 0) {
-            $project = Project::query()->find($id);
-
-            return $project === null ? $empty : [
-                ...$empty,
-                'customer_id' => $project->customer_id,
-                'contract_id' => $project->contract_id,
-                'project_id' => $project->getKey(),
             ];
         }
 
@@ -228,31 +202,14 @@ class InvoiceForm
     /**
      * @return array<int, string>
      */
-    private static function projectOptions(mixed $contractId): array
+    private static function acceptanceOptions(mixed $contractId): array
     {
         if (blank($contractId)) {
             return [];
         }
 
-        return Project::query()
-            ->where('contract_id', $contractId)
-            ->orderByDesc('id')
-            ->get()
-            ->mapWithKeys(fn (Project $project): array => [$project->getKey() => "{$project->code} — {$project->name}"])
-            ->all();
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private static function acceptanceOptions(mixed $projectId): array
-    {
-        if (blank($projectId)) {
-            return [];
-        }
-
         return Acceptance::query()
-            ->where('project_id', $projectId)
+            ->where('contract_id', $contractId)
             ->where('status', AcceptanceStatus::Approved->value)
             ->orderByDesc('id')
             ->get()

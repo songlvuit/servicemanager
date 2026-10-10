@@ -35,25 +35,25 @@ class SettingsTest extends TestCase
         $this->assertSame(MarginBand::Normal, MarginBand::for(25));
 
         Settings::save([
-            'project.budget_warning_threshold' => '70',
-            'project.margin_good' => 24,
+            'job.budget_warning_threshold' => '70',
+            'job.margin_good' => 24,
             'company.name' => '  Công ty TNHH Dịch Vụ Sáng Tạo  ',
         ]);
 
-        $this->assertSame(70.0, config('project.budget_warning_threshold'));
+        $this->assertSame(70.0, config('job.budget_warning_threshold'));
         $this->assertSame('Công ty TNHH Dịch Vụ Sáng Tạo', config('company.name'));
         $this->assertSame(CostStatus::Warning, CostStatus::for(100, 75));
         $this->assertSame(MarginBand::Good, MarginBand::for(25));
 
         // Lần khởi động sau (config trở về mặc định) giá trị đã lưu được nạp lại.
-        config(['project.budget_warning_threshold' => 80.0, 'company.name' => null]);
+        config(['job.budget_warning_threshold' => 80.0, 'company.name' => null]);
         Cache::forget(Settings::CACHE_KEY);
 
         Settings::apply();
 
-        $this->assertSame(70.0, config('project.budget_warning_threshold'));
+        $this->assertSame(70.0, config('job.budget_warning_threshold'));
         $this->assertSame('Công ty TNHH Dịch Vụ Sáng Tạo', config('company.name'));
-        $this->assertSame(70.0, Settings::current()['project.budget_warning_threshold']);
+        $this->assertSame(70.0, Settings::current()['job.budget_warning_threshold']);
     }
 
     public function test_only_declared_keys_can_be_saved(): void
@@ -114,11 +114,11 @@ class SettingsTest extends TestCase
 
         // Ba ngưỡng biên lợi nhuận phải tăng dần.
         Livewire::test(SystemSettings::class)
-            ->fillForm(['project.margin_danger' => 25, 'project.margin_warning' => 20])
+            ->fillForm(['job.margin_danger' => 25, 'job.margin_warning' => 20])
             ->call('save')
             ->assertNotified('Chưa lưu được cấu hình');
 
-        $this->assertSame(10.0, config('project.margin_danger'));
+        $this->assertSame(10.0, config('job.margin_danger'));
         $this->assertDatabaseCount('settings', 0);
     }
 

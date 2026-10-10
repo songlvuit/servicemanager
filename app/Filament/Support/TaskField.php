@@ -17,9 +17,7 @@ use Illuminate\Database\Eloquent\Model;
  * và trên lịch: gắn chứng từ vào một công việc để chi phí được tính cho công
  * việc đó.
  *
- * Ô này đi cùng ô `project_id` của form: chỉ liệt kê công việc của dự án đang
- * chọn, hoặc các việc độc lập khi không chọn dự án. Ô `project_id` cần ->live()
- * và xoá `task_id` khi đổi dự án.
+ * Chứng từ không gắn công việc nào là chi phí chung của công ty.
  */
 class TaskField
 {
@@ -27,11 +25,11 @@ class TaskField
     {
         return Select::make($name)
             ->label('Công việc')
-            ->options(fn (Get $get): array => static::options($get('project_id'), $get($name)))
+            ->options(fn (Get $get): array => static::options($get($name)))
             ->default(fn (): ?int => static::requested()?->getKey())
             ->searchable()
             ->placeholder('Không gắn công việc')
-            ->helperText('Chọn để khoản này được tính vào chi phí của công việc đó.');
+            ->helperText('Chọn để khoản này được tính vào chi phí của công việc đó. Bỏ trống thì là chi phí chung của công ty.');
     }
 
     /**
@@ -48,12 +46,11 @@ class TaskField
     }
 
     /**
-     * Công việc chưa huỷ mà người dùng được gắn chứng từ vào, của dự án
-     * $projectId (hoặc việc độc lập khi không có dự án); luôn kèm công việc đang chọn.
+     * Công việc chưa huỷ mà người dùng được gắn chứng từ vào; luôn kèm công việc đang chọn.
      *
      * @return array<int, string>
      */
-    public static function options(mixed $projectId, mixed $selected = null): array
+    public static function options(mixed $selected = null): array
     {
         $user = auth()->user();
 
@@ -62,11 +59,6 @@ class TaskField
         }
 
         return static::selectable($user)
-            ->when(
-                filled($projectId),
-                fn (Builder $query) => $query->where('project_id', $projectId),
-                fn (Builder $query) => $query->whereNull('project_id'),
-            )
             // Việc đã xong vẫn nhận chi phí (hoá đơn về sau); chỉ loại việc đã huỷ.
             ->where(function (Builder $query) use ($selected): void {
                 $query->where('status', '!=', TaskStatus::Cancelled->value);

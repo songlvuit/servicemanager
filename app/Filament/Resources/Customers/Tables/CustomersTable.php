@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Customers\Tables;
 
 use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
+use App\Filament\Support\Access;
 use App\Models\Customer;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -56,7 +57,9 @@ class CustomersTable
                 TextColumn::make('quotations_count')
                     ->label('Báo giá')
                     ->counts('quotations')
-                    ->sortable(),
+                    ->sortable()
+                    // Báo giá là thông tin chỉ người được xem báo giá mới thấy.
+                    ->visible(fn (): bool => Access::can('quotations.view')),
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge(),

@@ -5,10 +5,11 @@ namespace App\Filament\Resources\Tasks\Schemas;
 use App\Enums\ScheduleStatus;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
-use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
 use App\Filament\Support\Access;
+use App\Filament\Support\ContractLink;
 use App\Filament\Support\Fields;
 use App\Filament\Support\Scheduling\ScheduleForm;
+use App\Filament\Support\TaskField;
 use App\Models\Customer;
 use App\Models\ScheduleType;
 use App\Models\Task;
@@ -19,16 +20,15 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
-use Livewire\Component as Livewire;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Form công việc, dùng chung cho màn hình Công việc, tab Công việc của dự án
+ * Form công việc, dùng chung cho màn hình Công việc, tab Công việc của hợp đồng
  * và bảng Kanban. Phần "Lịch làm việc" của form quyết định công việc hiện trên
  * Lịch làm việc thế nào. Người chỉ có quyền cập nhật công việc được giao (Employee)
  * chỉ sửa được trạng thái và tiến độ.
@@ -38,21 +38,12 @@ class TaskForm
     /**
      * @return list<Component>
      */
-    public static function components(bool $withProject = true): array
+    public static function components(bool $withContract = true): array
     {
         // Người lập kế hoạch công việc (có quyền tạo) mới đổi được nội dung, người phụ trách, thời hạn.
         $locked = fn (): bool => ! Access::can('tasks.create');
 
-        return [
-            Select::make('project_id')
-                ->label('Dự án')
-                ->options(fn (): array => BudgetItemForm::projectOptions())
-                ->searchable()
-                ->placeholder('Việc độc lập (không thuộc dự án)')
-                ->live()
-                ->disabledOn('edit')
-                ->visible($withProject)
-                ->columnSpanFull(),
+        return array_values(array_filter([
             TextInput::make('name')
                 ->label('Tên công việc')
                 ->required()
@@ -67,9 +58,10 @@ class TaskForm
                 ->disabled($locked),
             Select::make('parent_id')
                 ->label('Công việc cha')
-                ->options(fn (Get $get, Livewire $livewire, ?Task $record): array => static::parentOptions($get, $livewire, $record))
+                ->options(fn (Get $get, ?Task $record): array => static::parentOptions($get('parent_id'), $record))
                 ->searchable()
                 ->placeholder('Không có')
+                ->helperText('Công việc con luôn theo hợp đồng, báo giá của công việc cha.')
                 ->disabled($locked),
             Select::make('priority')
                 ->label('Mức ưu tiên')
@@ -82,7 +74,9 @@ class TaskForm
                 ->options(TaskStatus::class)
                 ->default(TaskStatus::Todo->value)
                 ->required(),
-            static::scheduleSection($locked, $withProject),
+            static::scheduleSection($locked),
+            // Chỉ có trong form của người được xem hợp đồng / báo giá.
+            ContractLink::formSection($withContract),
             Fields::zeroWhenBlank(TextInput::make('estimated_hours'))
                 ->label('Số giờ dự kiến')
                 ->numeric()
@@ -112,7 +106,34 @@ class TaskForm
                 ->rows(3)
                 ->disabled($locked)
                 ->columnSpanFull(),
-        ];
+        ]));
+    }
+
+    /**
+     * Dữ liệu của công việc được phép đưa xuống form của người đang đăng nhập:
+     * chỉ các cột có ô nhập, và bỏ ngân sách / hợp đồng / báo giá nếu người đó
+     * không được xem — để các giá trị này không nằm trong dữ liệu gửi tới trình duyệt.
+     *
+     * @param  array<string, mixed>  $data  Thuộc tính của công việc.
+     * @return array<string, mixed>
+     */
+    public static function state(array $data): array
+    {
+        $allowed = array_flip((new Task)->getFillable());
+
+        if (! Access::canSeeCosts()) {
+            unset($allowed['budget']);
+        }
+
+        if (! ContractLink::canSeeContracts()) {
+            unset($allowed['contract_id']);
+        }
+
+        if (! ContractLink::canSeeQuotations()) {
+            unset($allowed['quotation_id']);
+        }
+
+        return array_intersect_key($data, $allowed);
     }
 
     /**
@@ -120,7 +141,7 @@ class TaskForm
      * việc có ngày bắt đầu tự hiện trên Lịch làm việc theo các thông tin ở đây
      * (xem TaskSchedule).
      */
-    private static function scheduleSection(Closure $locked, bool $withProject): Section
+    private static function scheduleSection(Closure $locked): Section
     {
         return Section::make('Lịch làm việc')
             ->icon(Heroicon::OutlinedCalendarDays)
@@ -202,10 +223,8 @@ class TaskForm
                     ->options(fn (): array => Customer::query()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable()
                     ->placeholder('Chưa chọn')
-                    ->helperText('Chỉ cần chọn cho việc độc lập; việc thuộc dự án thì theo khách hàng của dự án.')
-                    ->disabled($locked)
-                    ->visible($withProject)
-                    ->hidden(fn (Get $get): bool => filled($get('project_id'))),
+                    ->helperText('Công việc gắn hợp đồng / báo giá thì khách hàng tự theo hợp đồng, báo giá đó.')
+                    ->disabled($locked),
                 Toggle::make('is_tentative')
                     ->label('Lịch dự kiến (chưa chốt)')
                     ->helperText('Lịch dự kiến hiện viền đứt trên Lịch làm việc để mọi người biết là chưa chốt.')
@@ -264,27 +283,26 @@ class TaskForm
     }
 
     /**
-     * Công việc cùng dự án (trừ chính nó) có thể làm công việc cha; với việc
-     * độc lập thì là các việc độc lập khác.
+     * Công việc gốc còn mở (trừ chính nó) có thể làm công việc cha; luôn kèm công việc cha đang chọn.
      *
      * @return array<int, string>
      */
-    private static function parentOptions(Get $get, Livewire $livewire, ?Task $record): array
+    private static function parentOptions(mixed $selected, ?Task $record): array
     {
-        $projectId = $record?->project_id
-            ?? ($livewire instanceof RelationManager ? $livewire->getOwnerRecord()->getKey() : $get('project_id'));
-
         return Task::query()
-            // Việc độc lập chỉ làm con của một việc độc lập khác.
-            ->when(
-                filled($projectId),
-                fn ($query) => $query->where('project_id', $projectId),
-                fn ($query) => $query->whereNull('project_id'),
-            )
             ->whereNull('parent_id')
-            ->when($record !== null, fn ($query) => $query->whereKeyNot($record->getKey()))
-            ->orderBy('name')
-            ->pluck('name', 'id')
+            ->when($record !== null, fn (Builder $query) => $query->whereKeyNot($record->getKey()))
+            ->where(function (Builder $query) use ($selected): void {
+                $query->open();
+
+                if (filled($selected)) {
+                    $query->orWhere('id', $selected);
+                }
+            })
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get(['id', 'name', 'start_date'])
+            ->mapWithKeys(fn (Task $task): array => [$task->getKey() => TaskField::label($task)])
             ->all();
     }
 }

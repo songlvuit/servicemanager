@@ -55,25 +55,24 @@ class Settings
                     'help' => 'Chiết khấu vượt mức này thì báo giá phải do Giám đốc duyệt.',
                 ],
             ],
-            'Dự án & chi phí' => [
-                'project.budget_warning_threshold' => [
-                    'label' => 'Ngưỡng cảnh báo ngân sách',
+            'Công việc & hợp đồng' => [
+                'job.budget_warning_threshold' => [
+                    'label' => 'Ngưỡng cảnh báo ngân sách công việc',
                     'type' => self::TYPE_PERCENT,
-                    'help' => 'Chi phí thực tế đạt từ mức này của ngân sách thì dự án hiện cảnh báo.',
+                    'help' => 'Chi phí thực tế đạt từ mức này của ngân sách thì công việc hiện cảnh báo.',
                 ],
-                'project.deadline_warning_days' => ['label' => 'Nhắc dự án sắp tới hạn trước (ngày)', 'type' => self::TYPE_INTEGER, 'min' => 0, 'max' => 365],
-                'project.contract_expiry_warning_days' => ['label' => 'Nhắc hợp đồng sắp hết hạn trước (ngày)', 'type' => self::TYPE_INTEGER, 'min' => 0, 'max' => 365],
-                'project.margin_good' => [
+                'job.contract_expiry_warning_days' => ['label' => 'Nhắc hợp đồng sắp hết hạn trước (ngày)', 'type' => self::TYPE_INTEGER, 'min' => 0, 'max' => 365],
+                'job.margin_good' => [
                     'label' => 'Biên lợi nhuận "tốt" từ trên',
                     'type' => self::TYPE_PERCENT,
-                    'help' => 'Dự án có biên lợi nhuận trên mức này được đánh dấu là tốt.',
+                    'help' => 'Hợp đồng có biên lợi nhuận trên mức này được đánh dấu là tốt.',
                 ],
-                'project.margin_warning' => [
+                'job.margin_warning' => [
                     'label' => 'Biên lợi nhuận "cảnh báo" dưới',
                     'type' => self::TYPE_PERCENT,
-                    'help' => 'Dự án có biên lợi nhuận dưới mức này được đưa vào danh sách cần chú ý.',
+                    'help' => 'Hợp đồng có biên lợi nhuận dưới mức này được đánh dấu cảnh báo trong báo cáo lợi nhuận.',
                 ],
-                'project.margin_danger' => [
+                'job.margin_danger' => [
                     'label' => 'Biên lợi nhuận "nguy hiểm" dưới',
                     'type' => self::TYPE_PERCENT,
                 ],

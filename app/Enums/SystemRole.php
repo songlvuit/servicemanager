@@ -22,7 +22,7 @@ enum SystemRole: string
             self::SuperAdmin => 'Quản trị hệ thống',
             self::Director => 'Giám đốc',
             self::Sales => 'Kinh doanh',
-            self::ProjectManager => 'Quản lý dự án',
+            self::ProjectManager => 'Quản lý công việc',
             self::Accountant => 'Kế toán',
             self::Procurement => 'Mua hàng',
             self::Employee => 'Nhân viên',
@@ -34,11 +34,11 @@ enum SystemRole: string
         return match ($this) {
             self::SuperAdmin => 'Toàn quyền trên hệ thống.',
             self::Director => 'Xem toàn bộ hệ thống, duyệt các khoản quan trọng, xem tài chính và lợi nhuận.',
-            self::Sales => 'Quản lý khách hàng, cơ hội, báo giá, hợp đồng.',
-            self::ProjectManager => 'Quản lý dự án, công việc, nhân sự dự án, ngân sách, đề nghị chi.',
-            self::Accountant => 'Quản lý chi phí, hóa đơn, thanh toán, công nợ, nhà cung cấp.',
+            self::Sales => 'Quản lý khách hàng và cơ hội.',
+            self::ProjectManager => 'Quản lý công việc, lịch làm việc, chấm công, đề nghị chi, mua hàng.',
+            self::Accountant => 'Quản lý báo giá, hợp đồng, nghiệm thu, hóa đơn, thanh toán, công nợ, chi phí.',
             self::Procurement => 'Quản lý nhà cung cấp, yêu cầu mua hàng, đơn mua hàng.',
-            self::Employee => 'Xem dự án và công việc được giao, cập nhật công việc, tạo đề nghị chi.',
+            self::Employee => 'Xem công việc được giao, cập nhật công việc, chấm công, tạo đề nghị chi.',
         };
     }
 

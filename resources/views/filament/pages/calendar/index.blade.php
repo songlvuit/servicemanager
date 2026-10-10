@@ -43,15 +43,6 @@
                         @endforeach
                     </select>
 
-                    @if ($projects !== [])
-                        <select class="sm-cal-select" wire:model.live="project" aria-label="Lọc theo dự án">
-                            <option value="">Mọi dự án</option>
-                            @foreach ($projects as $id => $name)
-                                <option value="{{ $id }}">{{ $name }}</option>
-                            @endforeach
-                        </select>
-                    @endif
-
                     <label class="sm-cal-check">
                         <input type="checkbox" wire:model.live="cancelled">
                         Hiện lịch đã huỷ

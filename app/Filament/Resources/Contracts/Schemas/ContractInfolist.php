@@ -3,10 +3,14 @@
 namespace App\Filament\Resources\Contracts\Schemas;
 
 use App\Enums\ContractStatus;
+use App\Filament\Pages\Reports\ProfitReport;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Filament\Resources\Quotations\QuotationResource;
+use App\Filament\Support\Access;
 use App\Filament\Support\Columns;
 use App\Models\Contract;
+use App\Support\Decimal;
+use App\Support\Money;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
@@ -70,6 +74,37 @@ class ContractInfolist
                         Columns::moneyEntry('tax_amount', 'Thuế GTGT'),
                         Columns::moneyEntry('total_value', 'Tổng giá trị (gồm thuế)')
                             ->weight(FontWeight::SemiBold),
+                    ]),
+
+                Section::make('Chi phí & lợi nhuận')
+                    ->icon(Heroicon::OutlinedChartBar)
+                    ->description('Chi phí là tổng chi phí (trước thuế) của các công việc gắn với hợp đồng — xem tab Công việc.')
+                    ->columns(['default' => 2, 'lg' => 4])
+                    ->columnSpanFull()
+                    ->visible(fn (): bool => Access::canSeeCosts())
+                    ->schema([
+                        Columns::moneyEntry('budget', 'Ngân sách các công việc'),
+                        Columns::moneyEntry('committed_cost', 'Chi phí đã cam kết'),
+                        Columns::moneyEntry('actual_cost', 'Chi phí thực tế')
+                            ->weight(FontWeight::SemiBold),
+                        Columns::moneyEntry('actual_profit', 'Lợi nhuận')
+                            ->weight(FontWeight::SemiBold)
+                            ->color(fn (Contract $record): string => (float) $record->actual_profit < 0 ? 'danger' : 'success')
+                            ->helperText('Giá trị hợp đồng − chi phí thực tế.'),
+                        TextEntry::make('margin_band')
+                            ->label('Biên lợi nhuận')
+                            // Chưa phát sinh chi phí thì chưa đánh giá (không coi 100% là "tốt").
+                            ->state(fn (Contract $record): ?string => ($band = ProfitReport::band($record)) === null
+                                ? null
+                                : Money::percent($record->profit_margin).' · '.$band->getLabel())
+                            ->badge()
+                            ->color(fn (Contract $record): string => ProfitReport::band($record)?->getColor() ?? 'gray')
+                            ->placeholder('Chưa có chi phí'),
+                        Columns::moneyEntry('invoiced_amount', 'Đã xuất hóa đơn (gồm thuế)'),
+                        Columns::moneyEntry('collected_amount', 'Đã thu'),
+                        TextEntry::make('receivable')
+                            ->label('Còn phải thu')
+                            ->state(fn (Contract $record): string => Money::format(Decimal::sub($record->invoiced_amount, $record->collected_amount))),
                     ]),
 
                 Section::make('Thời hạn & điều khoản')

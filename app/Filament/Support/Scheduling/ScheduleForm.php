@@ -3,9 +3,7 @@
 namespace App\Filament\Support\Scheduling;
 
 use App\Enums\ScheduleStatus;
-use App\Filament\Support\Access;
 use App\Models\Customer;
-use App\Models\Project;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
 use App\Models\User;
@@ -42,15 +40,15 @@ class ScheduleForm
      * @param  bool  $restricted  Người chỉ sửa lịch nghỉ của chính mình: chỉ đổi được thời gian và ghi chú.
      * @return list<Component>
      */
-    public static function components(?int $entryId = null, bool $restricted = false, bool $withProject = true): array
+    public static function components(?int $entryId = null, bool $restricted = false): array
     {
-        return [Grid::make(2)->schema(static::fields($entryId, $restricted, $withProject))];
+        return [Grid::make(2)->schema(static::fields($entryId, $restricted))];
     }
 
     /**
      * @return list<Component>
      */
-    private static function fields(?int $entryId, bool $restricted, bool $withProject): array
+    private static function fields(?int $entryId, bool $restricted): array
     {
         return [
             TextInput::make('title')
@@ -122,30 +120,12 @@ class ScheduleForm
                 ->disabled($restricted)
                 ->hidden(fn (Get $get): bool => static::isLeaveType($get('schedule_type_id')))
                 ->columnSpanFull(),
-            Select::make('project_id')
-                ->label('Dự án')
-                ->options(fn (?ScheduleEntry $record, Get $get): array => static::projectOptions($get('project_id')))
-                ->searchable()
-                ->placeholder('Không gắn dự án')
-                ->live()
-                ->afterStateUpdated(function (mixed $state, Set $set): void {
-                    if (filled($state)) {
-                        $set('customer_id', Project::query()->withTrashed()->find($state)?->customer_id);
-                    }
-                })
-                ->helperText('Bỏ trống nếu là việc độc lập. Gắn dự án thì giờ công và chi phí của lịch tính vào dự án đó.')
-                ->visible($withProject)
-                ->disabled($restricted)
-                ->hidden(fn (Get $get): bool => static::isLeaveType($get('schedule_type_id'))),
             Select::make('customer_id')
                 ->label('Khách hàng')
                 ->options(fn (): array => Customer::query()->orderBy('name')->pluck('name', 'id')->all())
                 ->searchable()
                 ->placeholder('Chưa chọn')
-                // Đã gắn dự án thì khách hàng là khách hàng của dự án.
-                ->disabled(fn (Get $get): bool => $restricted || filled($get('project_id')))
-                ->dehydrated()
-                ->visible($withProject)
+                ->disabled($restricted)
                 ->hidden(fn (Get $get): bool => static::isLeaveType($get('schedule_type_id'))),
             TextInput::make('location')
                 ->label('Địa điểm')
@@ -226,7 +206,6 @@ class ScheduleForm
                 'starts_at' => $start,
                 'ends_at' => $end,
                 'is_all_day' => $allDay,
-                'project_id' => $data['project_id'] ?? null,
                 'customer_id' => $data['customer_id'] ?? null,
                 'location' => $data['location'] ?? null,
                 'equipment' => $data['equipment'] ?? null,
@@ -243,7 +222,7 @@ class ScheduleForm
     public static function fromEntry(ScheduleEntry $entry): array
     {
         return [
-            ...$entry->only(['title', 'schedule_type_id', 'project_id', 'customer_id', 'is_all_day', 'location', 'equipment', 'external_crew', 'notes']),
+            ...$entry->only(['title', 'schedule_type_id', 'customer_id', 'is_all_day', 'location', 'equipment', 'external_crew', 'notes']),
             'status' => $entry->status->value,
             'start_date' => $entry->starts_at->toDateString(),
             'end_date' => $entry->ends_at->toDateString(),
@@ -270,28 +249,6 @@ class ScheduleForm
     public static function userOptions(): array
     {
         return User::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all();
-    }
-
-    /**
-     * Dự án đang mở mà người dùng được xem (kèm dự án đang chọn, dù đã đóng).
-     *
-     * @return array<int, string>
-     */
-    public static function projectOptions(mixed $selected = null): array
-    {
-        $user = auth()->user();
-
-        if ($user === null || ! Access::can('projects.view')) {
-            return [];
-        }
-
-        return Project::query()
-            ->visibleTo($user)
-            ->orderByDesc('id')
-            ->get()
-            ->filter(fn (Project $project): bool => ! $project->isClosed() || (string) $project->getKey() === (string) $selected)
-            ->mapWithKeys(fn (Project $project): array => [$project->getKey() => "{$project->code} — {$project->name}"])
-            ->all();
     }
 
     public static function isLeaveType(mixed $typeId): bool

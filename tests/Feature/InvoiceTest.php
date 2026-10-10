@@ -19,13 +19,13 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 class InvoiceTest extends TestCase
 {
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -194,21 +194,21 @@ class InvoiceTest extends TestCase
 
     public function test_acceptance_is_approved_and_turned_into_an_invoice(): void
     {
-        $pm = $this->createUserWithRole(SystemRole::ProjectManager);
+        $author = $this->accountant();
         $director = $this->createUserWithRole(SystemRole::Director);
-        $project = $this->makeProject();
+        $contract = $this->makeActiveContract();
         $workflow = app(AcceptanceWorkflow::class);
 
-        $acceptance = Acceptance::factory()->create(['project_id' => $project->getKey(), 'amount' => 40000000, 'description' => 'Nghiệm thu đợt 1']);
+        $acceptance = Acceptance::factory()->create(['contract_id' => $contract->getKey(), 'amount' => 40000000, 'description' => 'Nghiệm thu đợt 1']);
         $this->assertSame('NT-'.now()->year.'-0001', $acceptance->code);
 
-        $acceptance = $workflow->submit($acceptance, $pm);
+        $acceptance = $workflow->submit($acceptance, $author);
         $this->assertSame(AcceptanceStatus::Submitted, $acceptance->status);
 
-        // PM không tự duyệt được; Giám đốc duyệt.
+        // Kế toán lập nhưng không tự duyệt được; Giám đốc duyệt.
         try {
-            $workflow->approve($acceptance, $pm);
-            $this->fail('PM không có quyền duyệt nghiệm thu.');
+            $workflow->approve($acceptance, $author);
+            $this->fail('Kế toán không có quyền duyệt nghiệm thu.');
         } catch (AuthorizationException) {
             $this->assertSame(AcceptanceStatus::Submitted, $acceptance->refresh()->status);
         }
@@ -217,7 +217,7 @@ class InvoiceTest extends TestCase
         $this->assertSame(AcceptanceStatus::Approved, $acceptance->status);
         $this->assertSame($director->getKey(), $acceptance->approved_by);
 
-        // Kế toán lập hóa đơn từ biên bản: form điền sẵn khách hàng, hợp đồng, dự án, giá trị.
+        // Kế toán lập hóa đơn từ biên bản: form điền sẵn khách hàng, hợp đồng, giá trị.
         $this->actingAs($this->accountant());
 
         Livewire::test(ViewAcceptance::class, ['record' => $acceptance->getRouteKey()])
@@ -226,9 +226,8 @@ class InvoiceTest extends TestCase
         Livewire::withQueryParams(['acceptance' => $acceptance->getKey()])
             ->test(CreateInvoice::class)
             ->assertSchemaStateSet([
-                'customer_id' => $project->customer_id,
-                'contract_id' => $project->contract_id,
-                'project_id' => $project->getKey(),
+                'customer_id' => $contract->customer_id,
+                'contract_id' => $contract->getKey(),
                 'acceptance_id' => $acceptance->getKey(),
                 'description' => 'Nghiệm thu đợt 1',
                 'subtotal' => '40000000',
@@ -248,7 +247,7 @@ class InvoiceTest extends TestCase
 
     public function test_rejected_acceptance_can_be_revised(): void
     {
-        $pm = $this->createUserWithRole(SystemRole::ProjectManager);
+        $pm = $this->accountant();
         $director = $this->createUserWithRole(SystemRole::Director);
         $workflow = app(AcceptanceWorkflow::class);
 
@@ -313,8 +312,8 @@ class InvoiceTest extends TestCase
             ->assertActionHidden('issue')
             ->assertActionVisible('recordPayment');
 
-        // Sales xem được hóa đơn nhưng không phát hành, không thu tiền; nhân viên không vào được.
-        $this->actingAs($this->createUserWithRole(SystemRole::Sales));
+        // Người chỉ có quyền xem hóa đơn thì không phát hành, không thu tiền; nhân viên không vào được.
+        $this->actingAs($this->createUserWithPermissions(['invoices.view']));
 
         Livewire::test(ViewInvoice::class, ['record' => $invoice->getRouteKey()])
             ->assertActionHidden('recordPayment')

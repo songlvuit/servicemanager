@@ -14,8 +14,8 @@ use Illuminate\Auth\Access\AuthorizationException;
 
 /**
  * Ghi giờ công cho cả ê-kíp từ một lịch đã làm xong: mỗi người, mỗi ngày của
- * lịch một dòng giờ công (giờ × đơn giá giờ của từng người). Lịch có gắn dự án
- * thì chi phí nhân sự tính vào dự án đó; lịch độc lập thì là chi phí chung.
+ * lịch một dòng giờ công (giờ × đơn giá giờ của từng người), ghi vào công việc
+ * của lịch nên thành chi phí nhân sự của công việc đó.
  *
  * Gọi lại nhiều lần không ghi trùng: người / ngày nào đã ghi thì bỏ qua.
  */
@@ -50,14 +50,14 @@ class ScheduleTimesheets
             throw new AuthorizationException('Bạn không có quyền ghi giờ công từ lịch.');
         }
 
-        $entry->load(['crew', 'project', 'type']);
+        $entry->load(['crew', 'task', 'type']);
 
         if ($entry->isLeave()) {
             throw new WorkflowException('Lịch nghỉ / bận không ghi giờ công.');
         }
 
-        if ($entry->project !== null && ($entry->project->trashed() || $entry->project->isClosed())) {
-            throw new WorkflowException("Dự án {$entry->project->code} đã hoàn thành hoặc đã huỷ nên không nhận thêm giờ công.");
+        if ($entry->task?->isCancelled()) {
+            throw new WorkflowException('Công việc của lịch đã huỷ nên không nhận thêm giờ công.');
         }
 
         if ($entry->status === ScheduleStatus::Cancelled) {
@@ -79,7 +79,7 @@ class ScheduleTimesheets
         }
 
         return AuditLogger::transactionAs($by, function () use ($entry, $hours): int {
-            $entry = ScheduleEntry::query()->whereKey($entry->getKey())->lockForUpdate()->firstOrFail()->load(['crew', 'project']);
+            $entry = ScheduleEntry::query()->whereKey($entry->getKey())->lockForUpdate()->firstOrFail()->load(['crew']);
 
             $logged = $entry->timesheets()
                 ->get(['timesheets.id', 'timesheets.user_id', 'timesheets.work_date'])
@@ -102,7 +102,6 @@ class ScheduleTimesheets
 
                     $timesheet = Timesheet::create([
                         'user_id' => $user->getKey(),
-                        'project_id' => $entry->project_id,
                         // Giờ công vào luôn công việc của lịch để tính chi phí của công việc.
                         'task_id' => $entry->task_id,
                         'work_date' => $day->toDateString(),

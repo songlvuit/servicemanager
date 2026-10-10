@@ -4,10 +4,10 @@ namespace App\Models;
 
 use App\Enums\InvoiceStatus;
 use App\Exceptions\WorkflowException;
-use App\Models\Concerns\AffectsProjectCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasDocumentCode;
+use App\Services\Contracts\ContractFinancials;
 use App\Support\Decimal;
 use Database\Factories\InvoiceFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -37,7 +37,6 @@ class Invoice extends Model
     // Số liệu tính lại, không phải thao tác của người dùng: không ghi nhật ký.
     public const AUDIT_IGNORED = ['tax', 'paid_amount', 'remaining_amount'];
 
-    use AffectsProjectCosts;
     use HasAttachments;
     use HasDocumentCode;
 
@@ -54,7 +53,6 @@ class Invoice extends Model
     protected $fillable = [
         'customer_id',
         'contract_id',
-        'project_id',
         'acceptance_id',
         'description',
         'invoice_date',
@@ -98,6 +96,15 @@ class Invoice extends Model
 
     protected static function booted(): void
     {
+        // Hóa đơn / tiền thu đổi → tính lại "đã xuất hóa đơn", "đã thu" của hợp đồng.
+        $recalculate = function (Invoice $invoice): void {
+            app(ContractFinancials::class)->recalculateMany([$invoice->contract_id, $invoice->getOriginal('contract_id')]);
+        };
+
+        static::saved($recalculate);
+        static::deleted($recalculate);
+        static::restored($recalculate);
+
         static::creating(function (Invoice $invoice): void {
             $invoice->created_by ??= auth()->id();
         });
@@ -182,14 +189,6 @@ class Invoice extends Model
     public function contract(): BelongsTo
     {
         return $this->belongsTo(Contract::class)->withTrashed();
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
     }
 
     /**

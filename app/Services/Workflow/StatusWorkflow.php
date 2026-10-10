@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Khung chung cho các quy trình đổi trạng thái (hợp đồng, dự án, chi phí,
+ * Khung chung cho các quy trình đổi trạng thái (hợp đồng, chi phí,
  * mua hàng, hóa đơn...). Mỗi bước chuyển:
  *
  *   1. chạy trong một transaction và khoá dòng bản ghi;

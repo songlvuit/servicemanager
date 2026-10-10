@@ -23,7 +23,7 @@ class DevUserSeeder extends Seeder
         ['email' => 'admin@example.com', 'name' => 'Quản trị viên', 'position' => 'Quản trị hệ thống', 'role' => SystemRole::SuperAdmin],
         ['email' => 'director@example.com', 'name' => 'Nguyễn Văn Giám', 'position' => 'Giám đốc', 'role' => SystemRole::Director],
         ['email' => 'sales@example.com', 'name' => 'Trần Thị Kinh', 'position' => 'Nhân viên kinh doanh', 'role' => SystemRole::Sales],
-        ['email' => 'pm@example.com', 'name' => 'Lê Văn Dự', 'position' => 'Quản lý dự án', 'role' => SystemRole::ProjectManager],
+        ['email' => 'pm@example.com', 'name' => 'Lê Văn Dự', 'position' => 'Quản lý công việc', 'role' => SystemRole::ProjectManager],
         ['email' => 'accounting@example.com', 'name' => 'Phạm Thị Toán', 'position' => 'Kế toán', 'role' => SystemRole::Accountant],
         ['email' => 'procurement@example.com', 'name' => 'Hoàng Văn Mua', 'position' => 'Nhân viên mua hàng', 'role' => SystemRole::Procurement],
         ['email' => 'employee@example.com', 'name' => 'Đỗ Thị Viên', 'position' => 'Nhân viên', 'role' => SystemRole::Employee],

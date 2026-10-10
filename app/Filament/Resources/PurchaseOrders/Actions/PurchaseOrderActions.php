@@ -21,7 +21,7 @@ class PurchaseOrderActions
             ->icon(Heroicon::OutlinedPaperAirplane)
             ->color('primary')
             ->modalHeading(fn (PurchaseOrder $record): string => "Đặt hàng theo đơn {$record->code}?")
-            ->modalDescription(fn (PurchaseOrder $record): string => 'Bạn có chắc chắn muốn đặt hàng trị giá '.Money::format($record->total).'? Giá trị trước thuế sẽ được tính vào chi phí cam kết của dự án và đơn không sửa được nữa.');
+            ->modalDescription(fn (PurchaseOrder $record): string => 'Bạn có chắc chắn muốn đặt hàng trị giá '.Money::format($record->total).'? Giá trị trước thuế sẽ được tính vào chi phí cam kết của công việc và đơn không sửa được nữa.');
     }
 
     public static function receive(): Action
@@ -30,7 +30,7 @@ class PurchaseOrderActions
             ->icon(Heroicon::OutlinedInboxArrowDown)
             ->color('success')
             ->modalHeading(fn (PurchaseOrder $record): string => "Xác nhận đã nhận hàng của đơn {$record->code}?")
-            ->modalDescription('Giá trị đơn hàng sẽ được ghi vào chi phí thực tế của dự án.');
+            ->modalDescription('Giá trị đơn hàng sẽ được ghi vào chi phí thực tế của công việc.');
     }
 
     public static function complete(): Action

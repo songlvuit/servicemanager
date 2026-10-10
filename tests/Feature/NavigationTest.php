@@ -24,9 +24,9 @@ class NavigationTest extends TestCase
         // Trang giữ chỗ chỉ dành cho module chưa triển khai: giả lập hệ thống đang ở Phase 2.
         config(['access.completed_phase' => 2]);
 
-        $sales = $this->createUserWithRole(SystemRole::Sales);
+        $accountant = $this->createUserWithRole(SystemRole::Accountant);
 
-        $this->actingAs($sales)
+        $this->actingAs($accountant)
             ->get(ComingSoon::getUrl(['module' => 'contracts']))
             ->assertOk()
             ->assertSee('Hợp đồng');
@@ -70,9 +70,23 @@ class NavigationTest extends TestCase
             ->get('/admin')
             ->assertOk()
             ->assertSee('Cơ hội')
-            ->assertSee('Hợp đồng')
+            // Báo giá, hợp đồng chỉ Giám đốc và Kế toán thấy — kể cả trên bảng điều khiển.
+            ->assertDontSee('Báo giá')
+            ->assertDontSee('Hợp đồng')
+            ->assertDontSee('Dự án')
             ->assertDontSee('Nhà cung cấp')
             ->assertDontSee('Audit Log');
+    }
+
+    public function test_accountant_sees_quotations_and_contracts_in_the_sidebar(): void
+    {
+        $this->actingAs($this->createUserWithRole(SystemRole::Accountant))
+            ->get('/admin')
+            ->assertOk()
+            ->assertSee('Báo giá')
+            ->assertSee('Hợp đồng')
+            ->assertSee('Công việc')
+            ->assertDontSee('Dự án');
     }
 
     public function test_dashboard_greeting_follows_the_time_of_day(): void

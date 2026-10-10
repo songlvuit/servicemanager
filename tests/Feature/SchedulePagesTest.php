@@ -2,13 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ProjectStatus;
 use App\Enums\ScheduleStatus;
 use App\Enums\SystemRole;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\WorkCalendar;
-use App\Filament\Resources\Projects\Pages\ViewProject;
-use App\Filament\Resources\Projects\RelationManagers\ScheduleRelationManager;
 use App\Filament\Resources\ScheduleTypes\Pages\ManageScheduleTypes;
 use App\Filament\Resources\ScheduleTypes\ScheduleTypeResource;
 use App\Filament\Resources\Tasks\Pages\ManageTasks;
@@ -17,6 +14,7 @@ use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\Scheduling\ScheduleForm;
 use App\Filament\Widgets\MySchedule;
 use App\Models\AuditLog;
+use App\Models\Customer;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
 use App\Models\Task;
@@ -28,7 +26,7 @@ use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsSchedules;
 use Tests\TestCase;
 
@@ -37,7 +35,7 @@ use Tests\TestCase;
  */
 class SchedulePagesTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsSchedules;
     use RefreshDatabase;
 
@@ -135,19 +133,19 @@ class SchedulePagesTest extends TestCase
     public function test_calendar_follows_tasks_and_cannot_add_or_edit_work(): void
     {
         $type = ScheduleType::query()->where('name', 'Livestream')->first();
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
+        $customer = Customer::factory()->create();
 
         $this->actingAs($this->pm);
 
         // Lịch không nhập ở trang Lịch: thêm công việc ở mục Công việc.
         Livewire::test(WorkCalendar::class)
             ->assertActionDoesNotExist('createEntry')
-            ->assertSee('tự lấy từ Công việc và Dự án')
+            ->assertSee('tự lấy từ mục Công việc')
             ->assertDontSee('Livestream ra mắt');
 
         Livewire::test(ManageTasks::class)
             ->callAction('create', data: [
-                'project_id' => $project->getKey(),
+                'customer_id' => $customer->getKey(),
                 'name' => 'Livestream ra mắt',
                 'assignee_id' => $this->employee->getKey(),
                 'start_date' => '2026-10-08',
@@ -169,8 +167,7 @@ class SchedulePagesTest extends TestCase
         $this->assertSame('2026-10-08 13:30:00', $entry->starts_at->toDateTimeString());
         $this->assertSame('2026-10-08 17:00:00', $entry->ends_at->toDateTimeString());
         $this->assertSame($type->getKey(), $entry->schedule_type_id);
-        $this->assertSame($project->getKey(), $entry->project_id);
-        $this->assertSame($project->customer_id, $entry->customer_id);
+        $this->assertSame($customer->getKey(), $entry->customer_id);
         $this->assertSame('Studio A', $entry->location);
         $this->assertSame([$this->employee->getKey()], $entry->crew->pluck('id')->all());
         $this->assertSame($this->pm->getKey(), $entry->created_by);
@@ -321,8 +318,7 @@ class SchedulePagesTest extends TestCase
 
     public function test_timesheets_are_logged_from_the_calendar(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->employee], ['project_id' => $project->getKey(), 'title' => 'Quay TVC']);
+        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->employee], ['title' => 'Quay TVC']);
 
         $this->actingAs($this->pm);
 
@@ -334,7 +330,6 @@ class SchedulePagesTest extends TestCase
             ->assertNotified('Đã ghi 1 dòng giờ công.');
 
         $this->assertSame('600000.00', Timesheet::query()->sole()->cost);
-        $this->assertSame('600000.00', $project->refresh()->labor_cost);
         $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
     }
 
@@ -492,25 +487,17 @@ class SchedulePagesTest extends TestCase
         $this->get(WorkCalendar::getUrl(['date' => '2026-10-08']))->assertOk();
     }
 
-    public function test_project_page_lists_its_schedules_and_dashboard_shows_my_week(): void
+    public function test_dashboard_shows_my_week(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active, 'project_manager_id' => $this->pm->getKey()]);
-        $mine = $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->employee], ['project_id' => $project->getKey(), 'title' => 'Quay TVC ngày 1']);
-        $other = $this->makeEntry('2026-10-09 08:00', '2026-10-09 12:00', [$this->pm], ['title' => 'Việc dự án khác']);
-        $far = $this->makeEntry('2026-10-20 08:00', '2026-10-20 12:00', [$this->employee], ['title' => 'Việc còn xa']);
-
-        $this->actingAs($this->pm);
-
-        Livewire::test(ScheduleRelationManager::class, ['ownerRecord' => $project, 'pageClass' => ViewProject::class])
-            ->assertSuccessful()
-            ->assertCanSeeTableRecords([$mine])
-            ->assertCanNotSeeTableRecords([$other, $far]);
+        $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->employee], ['title' => 'Quay TVC ngày 1']);
+        $this->makeEntry('2026-10-09 08:00', '2026-10-09 12:00', [$this->pm], ['title' => 'Việc của người khác']);
+        $this->makeEntry('2026-10-20 08:00', '2026-10-20 12:00', [$this->employee], ['title' => 'Việc còn xa']);
 
         // Dashboard: mỗi người thấy lịch 7 ngày tới của chính mình.
         Livewire::actingAs($this->employee)
             ->test(MySchedule::class)
             ->assertSee('Quay TVC ngày 1')
-            ->assertDontSee('Việc dự án khác')
+            ->assertDontSee('Việc của người khác')
             ->assertDontSee('Việc còn xa');
 
         $this->actingAs($this->createUserWithRole(SystemRole::Accountant))

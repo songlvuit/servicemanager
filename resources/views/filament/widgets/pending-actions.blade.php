@@ -29,7 +29,7 @@
         @if ($items === [])
             <x-filament::empty-state
                 heading="Không có việc nào cần xử lý"
-                description="Hóa đơn quá hạn, dự án vượt ngân sách và các chứng từ chờ bạn duyệt sẽ xuất hiện tại đây."
+                description="Hóa đơn quá hạn, công việc vượt ngân sách và các chứng từ chờ bạn duyệt sẽ xuất hiện tại đây."
                 icon="heroicon-o-check-circle"
                 icon-color="success"
                 :contained="false"

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Tasks;
 
 use App\Filament\Resources\Tasks\Pages\ManageTasks;
+use App\Filament\Resources\Tasks\Pages\TaskBoard;
 use App\Filament\Resources\Tasks\Pages\ViewTask;
 use App\Filament\Resources\Tasks\RelationManagers\ExpensesRelationManager;
 use App\Filament\Resources\Tasks\RelationManagers\PurchasesRelationManager;
@@ -11,6 +12,7 @@ use App\Filament\Resources\Tasks\RelationManagers\TimesheetsRelationManager;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\Tables\TasksTable;
+use App\Filament\Support\ContractLink;
 use App\Filament\Support\VietnameseLabels;
 use App\Models\Task;
 use BackedEnum;
@@ -31,7 +33,7 @@ class TaskResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static ?string $navigationLabel = 'Công việc';
 
@@ -72,6 +74,7 @@ class TaskResource extends Resource
     {
         return [
             'index' => ManageTasks::route('/'),
+            'board' => TaskBoard::route('/board'),
             'view' => ViewTask::route('/{record}'),
         ];
     }
@@ -82,7 +85,12 @@ class TaskResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['project', 'assignee', 'parent', 'schedule.type', 'schedule.crew', 'customer'])
+            ->with(['assignee', 'parent', 'schedule.type', 'schedule.crew', 'customer'])
+            // Hợp đồng, báo giá chỉ được nạp cho người được xem chúng.
+            ->with(array_keys(array_filter([
+                'contract' => ContractLink::canSeeContracts(),
+                'quotation' => ContractLink::canSeeQuotations(),
+            ])))
             ->visibleTo(auth()->user());
     }
 

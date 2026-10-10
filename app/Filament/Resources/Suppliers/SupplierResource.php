@@ -38,7 +38,7 @@ class SupplierResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static ?string $navigationLabel = 'Nhà cung cấp';
 

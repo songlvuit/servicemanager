@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\CostStatus;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
-use App\Services\Projects\ProjectFinancials;
+use App\Services\Contracts\ContractFinancials;
 use App\Services\Scheduling\TaskSchedule;
+use App\Services\Tasks\TaskFinancials;
 use App\Support\Decimal;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,17 +18,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Công việc: thuộc một dự án, hoặc là việc độc lập (project_id rỗng). Tiến độ
- * dự án = trung bình tiến độ các công việc chưa huỷ của nó, được tính lại mỗi
- * khi công việc thay đổi.
+ * Công việc — đơn vị quản lý duy nhất của phần mềm (không còn "dự án").
  *
- * Công việc cũng là nơi quản lý tiền của một "job": `budget` do người quản lý
- * nhập, còn `committed_cost` / `actual_cost` chỉ do TaskFinancials ghi, tính
- * từ đề nghị chi, mua hàng và giờ công gắn vào công việc.
+ * Tiền: `budget` do người quản lý nhập, còn `committed_cost` / `actual_cost`
+ * chỉ do TaskFinancials ghi, tính từ đề nghị chi, mua hàng và giờ công gắn
+ * vào công việc VÀ các công việc con của nó (ngân sách của việc lớn bao trùm
+ * các việc con).
  *
- * Công việc là NGUỒN của Lịch làm việc: công việc có ngày bắt đầu tự có một
- * lịch (schedule()) mang loại lịch, giờ, ê-kíp, địa điểm… nhập ở công việc —
- * xem TaskSchedule.
+ * Hợp đồng & báo giá: công việc gắn được với một hợp đồng và / hoặc một báo
+ * giá (`contract_id`, `quotation_id`). Đây là thông tin kinh doanh: chỉ người
+ * có quyền xem Hợp đồng / Báo giá mới thấy trên giao diện. Công việc con luôn
+ * theo hợp đồng, báo giá của công việc cha. Chi phí và lợi nhuận của hợp đồng
+ * là tổng từ các công việc cấp cao nhất gắn với nó — xem ContractFinancials.
+ *
+ * Lịch: công việc là NGUỒN của Lịch làm việc — công việc có ngày bắt đầu tự có
+ * một lịch (schedule()) mang loại lịch, giờ, ê-kíp, địa điểm… nhập ở công
+ * việc; xem TaskSchedule.
  */
 class Task extends Model
 {
@@ -37,7 +44,8 @@ class Task extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'project_id',
+        'contract_id',
+        'quotation_id',
         'parent_id',
         'name',
         'description',
@@ -109,7 +117,6 @@ class Task extends Model
         static::creating(function (Task $task): void {
             // Công việc mới nằm cuối cột của nó trên bảng Kanban.
             $task->sort_order = (int) static::query()
-                ->where('project_id', $task->project_id)
                 ->where('status', $task->status)
                 ->max('sort_order') + 1;
         });
@@ -120,20 +127,127 @@ class Task extends Model
             }
 
             $task->progress = max(0, min(100, (int) $task->progress));
+
+            $task->alignWithContract();
         });
 
-        $recalculate = function (Task $task): void {
-            if ($task->project !== null) {
-                app(ProjectFinancials::class)->recalculateProgress($task->project);
+        // Gắn / gỡ hợp đồng, đổi ngân sách, đổi công việc cha, xoá công việc:
+        // tiền của công việc cha và của hợp đồng liên quan được tính lại.
+        static::saved(function (Task $task): void {
+            if ($task->wasChanged('parent_id') || ($task->wasRecentlyCreated && $task->parent_id !== null)) {
+                app(TaskFinancials::class)->recalculateMany([$task->parent_id, $task->getOriginal('parent_id')]);
             }
-        };
 
-        static::saved($recalculate);
-        static::deleted($recalculate);
+            if ($task->wasRecentlyCreated || $task->wasChanged(['contract_id', 'budget', 'parent_id'])) {
+                app(ContractFinancials::class)->recalculateMany([$task->contract_id, $task->getOriginal('contract_id')]);
+            }
+        });
+        static::deleted(function (Task $task): void {
+            app(TaskFinancials::class)->recalculateMany([$task->parent_id]);
+            app(ContractFinancials::class)->recalculateMany([$task->contract_id]);
+        });
 
         // Lịch làm việc lấy từ công việc: mỗi lần công việc đổi, lịch của nó đổi theo.
         static::saved(fn (Task $task) => app(TaskSchedule::class)->sync($task));
         static::deleting(fn (Task $task) => app(TaskSchedule::class)->forget($task));
+    }
+
+    /**
+     * Giữ hợp đồng, báo giá và khách hàng của công việc khớp nhau:
+     *   - công việc con theo hợp đồng / báo giá của công việc cha;
+     *   - chọn hợp đồng mà chưa chọn báo giá thì lấy báo giá của hợp đồng;
+     *   - khách hàng là khách hàng của hợp đồng, nếu không thì của báo giá.
+     */
+    private function alignWithContract(): void
+    {
+        if ($this->parent_id !== null) {
+            $parent = static::query()->whereKey($this->parent_id)->first(['contract_id', 'quotation_id']);
+
+            if ($parent !== null) {
+                $this->contract_id = $parent->contract_id;
+                $this->quotation_id = $parent->quotation_id;
+            }
+        }
+
+        if ($this->exists && ! $this->isDirty(['contract_id', 'quotation_id', 'customer_id'])) {
+            return;
+        }
+
+        if ($this->contract_id !== null) {
+            $contract = Contract::query()->withTrashed()->whereKey($this->contract_id)->first(['customer_id', 'quotation_id']);
+
+            if ($contract !== null) {
+                if ($this->quotation_id === null && $this->isDirty('contract_id')) {
+                    $this->quotation_id = $contract->quotation_id;
+                }
+
+                $this->customer_id = $contract->customer_id;
+            }
+
+            return;
+        }
+
+        if ($this->quotation_id !== null) {
+            $this->customer_id = Quotation::query()->withTrashed()->whereKey($this->quotation_id)->value('customer_id') ?? $this->customer_id;
+        }
+    }
+
+    /**
+     * Gắn (hoặc gỡ) hợp đồng / báo giá cho công việc và mọi công việc con của nó.
+     *
+     * @param  array{contract_id?: mixed, quotation_id?: mixed}  $link  Chỉ những khoá có mặt mới được đổi.
+     */
+    public function linkToContract(array $link): void
+    {
+        $this->fill(array_intersect_key($link, ['contract_id' => true, 'quotation_id' => true]));
+
+        // Gỡ hợp đồng mà không nói gì về báo giá thì báo giá giữ nguyên.
+        $this->save();
+
+        // Công việc con (mọi cấp) tự lấy lại hợp đồng, báo giá của cha khi lưu.
+        foreach (static::query()->whereKey($this->descendantIds())->orderBy('id')->get() as $child) {
+            $child->contract_id = $this->contract_id;
+            $child->quotation_id = $this->quotation_id;
+            $child->save();
+        }
+    }
+
+    /**
+     * Id của mọi công việc con, cháu… của công việc này (không gồm chính nó).
+     *
+     * @return list<int>
+     */
+    public function descendantIds(): array
+    {
+        $found = [];
+        $level = [$this->getKey()];
+
+        // Giới hạn số cấp để một vòng lặp cha–con (nếu lỡ có) không làm treo.
+        for ($depth = 0; $depth < 10 && $level !== []; $depth++) {
+            $level = static::query()
+                ->whereIn('parent_id', $level)
+                ->whereKeyNot([$this->getKey(), ...$found])
+                ->pluck('id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->all();
+
+            $found = [...$found, ...$level];
+        }
+
+        return $found;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === TaskStatus::Cancelled;
+    }
+
+    /**
+     * Tình trạng chi phí so với ngân sách (Rule 6–7). Chưa đặt ngân sách thì không cảnh báo.
+     */
+    public function costStatus(): CostStatus
+    {
+        return $this->hasBudget() ? CostStatus::for($this->budget, $this->actual_cost) : CostStatus::NoBudget;
     }
 
     /**
@@ -224,6 +338,28 @@ class Task extends Model
     }
 
     /**
+     * Công việc có đặt ngân sách và chi phí thực tế đã vượt ngân sách (Rule 7).
+     *
+     * @param  Builder<Task>  $query
+     */
+    public function scopeOverBudget(Builder $query): void
+    {
+        $query->where('budget', '>', 0)->whereColumn('actual_cost', '>', 'budget');
+    }
+
+    /**
+     * Công việc có đặt ngân sách và chi phí thực tế đã đạt ngưỡng cảnh báo (Rule 6), kể cả đã vượt.
+     *
+     * @param  Builder<Task>  $query
+     */
+    public function scopeNearBudget(Builder $query): void
+    {
+        $query
+            ->where('budget', '>', 0)
+            ->whereRaw('actual_cost * 100 >= budget * ?', [(float) config('job.budget_warning_threshold', 80)]);
+    }
+
+    /**
      * @param  Builder<Task>  $query
      */
     public function scopeOverdue(Builder $query): void
@@ -232,11 +368,19 @@ class Task extends Model
     }
 
     /**
-     * @return BelongsTo<Project, $this>
+     * @return BelongsTo<Contract, $this>
      */
-    public function project(): BelongsTo
+    public function contract(): BelongsTo
     {
-        return $this->belongsTo(Project::class)->withTrashed();
+        return $this->belongsTo(Contract::class)->withTrashed();
+    }
+
+    /**
+     * @return BelongsTo<Quotation, $this>
+     */
+    public function quotation(): BelongsTo
+    {
+        return $this->belongsTo(Quotation::class)->withTrashed();
     }
 
     /**
@@ -293,7 +437,7 @@ class Task extends Model
     }
 
     /**
-     * Khách hàng của việc độc lập (việc thuộc dự án thì theo khách hàng của dự án).
+     * Khách hàng của công việc (tự lấy theo hợp đồng / báo giá nếu có gắn).
      *
      * @return BelongsTo<Customer, $this>
      */

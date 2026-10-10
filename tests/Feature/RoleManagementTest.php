@@ -69,13 +69,13 @@ class RoleManagementTest extends TestCase
     public function test_editing_a_role_syncs_its_permissions(): void
     {
         $role = Role::create(['name' => 'Cộng tác viên', 'guard_name' => 'web']);
-        $role->givePermissionTo(['quotations.view', 'quotations.create', 'projects.view']);
+        $role->givePermissionTo(['quotations.view', 'quotations.create', 'tasks.view']);
 
         $this->actingAs($this->admin);
 
         Livewire::test(EditRole::class, ['record' => $role->getRouteKey()])
             ->fillForm([
-                // Bỏ toàn bộ quyền báo giá, thêm quyền khách hàng, giữ nguyên dự án.
+                // Bỏ toàn bộ quyền báo giá, thêm quyền khách hàng, giữ nguyên công việc.
                 'module_permissions.quotations' => [],
                 'module_permissions.customers' => ['customers.view', 'customers.update'],
             ])
@@ -83,7 +83,7 @@ class RoleManagementTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertEqualsCanonicalizing(
-            ['projects.view', 'customers.view', 'customers.update'],
+            ['tasks.view', 'customers.view', 'customers.update'],
             $role->fresh()->permissions->pluck('name')->all(),
         );
     }

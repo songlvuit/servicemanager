@@ -39,7 +39,7 @@ class ListContracts extends ListRecords
             'active' => Tab::make('Đang hiệu lực')
                 ->modifyQueryUsing($byStatus(ContractStatus::Active)),
             'expiring' => Tab::make('Sắp hết hạn')
-                ->modifyQueryUsing(fn (Builder $query): Builder => $query->expiringWithin((int) config('project.contract_expiry_warning_days', 30))),
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->expiringWithin((int) config('job.contract_expiry_warning_days', 30))),
             'closed' => Tab::make('Hoàn thành / Đã huỷ')
                 ->modifyQueryUsing($byStatus(ContractStatus::Completed, ContractStatus::Cancelled)),
         ];

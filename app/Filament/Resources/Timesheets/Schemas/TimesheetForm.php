@@ -2,30 +2,24 @@
 
 namespace App\Filament\Resources\Timesheets\Schemas;
 
-use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Support\Access;
-use App\Models\Task;
-use App\Models\Timesheet;
+use App\Filament\Support\TaskField;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Component;
-use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
-use Livewire\Component as Livewire;
 
 /**
  * Form ghi nhận giờ công (mục 28), dùng chung cho màn hình Chấm công và tab
- * Chấm công của dự án / của công việc. Người không có quyền "Xem tất cả" chỉ ghi giờ cho chính mình.
+ * Chấm công của công việc. Người không có quyền "Xem tất cả" chỉ ghi giờ cho chính mình.
  */
 class TimesheetForm
 {
     /**
      * @return list<Component>
      */
-    public static function components(bool $withProject = true, bool $withTask = true): array
+    public static function components(bool $withTask = true): array
     {
         return [
             Select::make('user_id')
@@ -36,22 +30,12 @@ class TimesheetForm
                 ->required()
                 // Chỉ người xem được giờ công của mọi người mới ghi hộ người khác.
                 ->visible(fn (): bool => Access::can('timesheets.view_all')),
-            Select::make('project_id')
-                ->label('Dự án')
-                ->options(fn (): array => BudgetItemForm::projectOptions())
-                ->searchable()
-                ->placeholder('Không gắn dự án')
-                ->helperText('Bỏ trống cho việc độc lập: giờ công khi đó là chi phí chung của công ty.')
-                ->live()
-                ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null))
-                ->visible($withProject),
-            Select::make('task_id')
-                ->label('Công việc')
-                ->options(fn (Get $get, Livewire $livewire, ?Timesheet $record): array => static::taskOptions($get, $livewire, $record))
-                ->searchable()
-                ->placeholder('Không gắn với công việc nào')
-                // Trên trang công việc thì công việc đã xác định sẵn.
-                ->visible($withTask),
+            // Trên trang công việc thì công việc đã xác định sẵn.
+            ...($withTask ? [
+                TaskField::select()
+                    ->placeholder('Không gắn với công việc nào')
+                    ->helperText('Giờ công gắn công việc thành chi phí nhân sự của công việc đó; bỏ trống thì là chi phí chung.'),
+            ] : []),
             DatePicker::make('work_date')
                 ->label('Ngày làm việc')
                 ->default(fn (): string => today()->toDateString())
@@ -72,29 +56,5 @@ class TimesheetForm
                 ->maxLength(255)
                 ->columnSpanFull(),
         ];
-    }
-
-    /**
-     * Công việc của dự án đang chọn mà người dùng được xem; chưa chọn dự án
-     * thì là các công việc độc lập (không thuộc dự án nào).
-     *
-     * @return array<int, string>
-     */
-    private static function taskOptions(Get $get, Livewire $livewire, ?Timesheet $record): array
-    {
-        $projectId = $livewire instanceof RelationManager
-            ? $livewire->getOwnerRecord()->getKey()
-            : ($get('project_id') ?? $record?->project_id);
-
-        return Task::query()
-            ->when(
-                filled($projectId),
-                fn ($query) => $query->where('project_id', $projectId),
-                fn ($query) => $query->whereNull('project_id'),
-            )
-            ->visibleTo(auth()->user())
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
     }
 }

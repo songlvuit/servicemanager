@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
  *
  *   Công việc                         Lịch
  *   tên, mô tả                     →  tên lịch, ghi chú
- *   dự án / khách hàng             →  dự án / khách hàng
+ *   khách hàng                     →  khách hàng
  *   ngày bắt đầu → hạn hoàn thành  →  từ ngày … đến ngày (thiếu hạn: một ngày)
  *   cả ngày / từ giờ – đến giờ     →  giờ của lịch
  *   người phụ trách + ê-kíp        →  ê-kíp (người phụ trách đứng đầu)
@@ -37,7 +37,7 @@ class TaskSchedule
 
     /** Các cột của công việc quyết định lịch: đổi cột khác thì không cần đụng tới lịch. */
     private const RELEVANT = [
-        'name', 'description', 'project_id', 'customer_id', 'assignee_id', 'status', 'start_date', 'due_date',
+        'name', 'description', 'customer_id', 'assignee_id', 'status', 'start_date', 'due_date',
         'schedule_type_id', 'is_all_day', 'start_time', 'end_time', 'crew_ids', 'location', 'equipment',
         'external_crew', 'is_tentative',
     ];
@@ -229,9 +229,7 @@ class TaskSchedule
         return [
             'title' => $task->name,
             'schedule_type_id' => $typeId,
-            'project_id' => $task->project_id,
-            // Có dự án thì lịch tự lấy khách hàng của dự án.
-            'customer_id' => $task->project_id !== null ? $entry?->customer_id : $task->customer_id,
+            'customer_id' => $task->customer_id,
             'starts_at' => $span['starts_at'],
             'ends_at' => $span['ends_at'],
             'is_all_day' => $span['is_all_day'],

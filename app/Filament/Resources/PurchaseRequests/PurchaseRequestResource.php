@@ -4,9 +4,7 @@ namespace App\Filament\Resources\PurchaseRequests;
 
 use App\Enums\BudgetCategory;
 use App\Enums\PurchaseRequestStatus;
-use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
 use App\Filament\Resources\Expenses\Schemas\ExpenseForm;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\PurchaseRequests\Pages\CreatePurchaseRequest;
 use App\Filament\Resources\PurchaseRequests\Pages\EditPurchaseRequest;
 use App\Filament\Resources\PurchaseRequests\Pages\ListPurchaseRequests;
@@ -29,7 +27,6 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
@@ -41,7 +38,7 @@ use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 /**
- * Yêu cầu mua hàng của nhóm dự án (mục 24).
+ * Yêu cầu mua hàng (mục 24).
  */
 class PurchaseRequestResource extends Resource
 {
@@ -53,7 +50,7 @@ class PurchaseRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingCart;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static ?string $navigationLabel = 'Yêu cầu mua hàng';
 
@@ -75,15 +72,6 @@ class PurchaseRequestResource extends Resource
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('project_id')
-                            ->label('Dự án')
-                            ->options(fn (): array => BudgetItemForm::projectOptions())
-                            ->default(fn (): ?int => (request()->integer('project') ?: null) ?? TaskField::requested()?->project_id)
-                            ->searchable()
-                            ->placeholder('Không gắn dự án')
-                            ->helperText('Bỏ trống nếu mua cho công ty dùng chung, không thuộc dự án nào.')
-                            ->live()
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null)),
                         TaskField::select(),
                         Select::make('category')
                             ->label('Nhóm chi phí')
@@ -137,12 +125,6 @@ class PurchaseRequestResource extends Resource
                             ->badge(),
                         TextEntry::make('requester.name')
                             ->label('Người yêu cầu'),
-                        TextEntry::make('project.name')
-                            ->label('Dự án')
-                            ->placeholder('Không gắn dự án')
-                            ->url(fn (PurchaseRequest $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
-                                ? ProjectResource::getUrl('view', ['record' => $record->project])
-                                : null),
                         TaskField::entry(),
                         TextEntry::make('category')
                             ->label('Nhóm chi phí')
@@ -176,7 +158,7 @@ class PurchaseRequestResource extends Resource
                 Columns::code(label: 'Mã'),
                 TextColumn::make('description')
                     ->label('Nội dung cần mua')
-                    ->description(fn (PurchaseRequest $record): ?string => implode(' · ', array_filter([$record->project?->name, $record->task?->name])) ?: null)
+                    ->description(fn (PurchaseRequest $record): ?string => $record->task?->name)
                     ->limit(70)
                     ->wrap()
                     ->searchable(),
@@ -198,12 +180,7 @@ class PurchaseRequestResource extends Resource
                     ->label('Trạng thái')
                     ->options(PurchaseRequestStatus::class)
                     ->multiple(),
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
-                    ->searchable()
-                    ->preload(),
-                Filters::withoutProject(),
+                Filters::withoutTask(),
             ])
             ->recordActions([
                 ViewAction::make(),
@@ -212,7 +189,7 @@ class PurchaseRequestResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('Chưa có yêu cầu mua hàng nào.')
-            ->emptyStateDescription('Nhóm dự án tạo yêu cầu mua hàng; sau khi được duyệt, bộ phận mua hàng lập đơn đặt hàng.')
+            ->emptyStateDescription('Người phụ trách công việc tạo yêu cầu mua hàng; sau khi được duyệt, bộ phận mua hàng lập đơn đặt hàng.')
             ->emptyStateActions([
                 CreateAction::make()
                     ->label('+ Tạo yêu cầu mua hàng'),
@@ -231,7 +208,7 @@ class PurchaseRequestResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['project', 'task', 'requester']);
+        return parent::getEloquentQuery()->with(['task', 'requester']);
     }
 
     /**

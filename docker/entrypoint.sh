@@ -3,7 +3,7 @@
 # Khởi động container ứng dụng.
 #
 # CONTAINER_ROLE=app (mặc định): chuẩn bị ứng dụng rồi mới chạy PHP-FPM
-#   - tạo .env nếu chưa có, cài thư viện Composer nếu chưa có vendor/
+#   - tạo .env nếu chưa có, dọn file của module đã bỏ, cài thư viện Composer nếu chưa có vendor/
 #   - sinh APP_KEY, chạy migration, đồng bộ vai trò & quyền
 # Các role khác (queue, scheduler): chạy thẳng lệnh được giao; chúng chỉ khởi
 # động sau khi container app đã sẵn sàng (xem depends_on trong docker-compose.yml).
@@ -45,6 +45,12 @@ mkdir -p \
     storage/framework/testing \
     storage/logs \
     bootstrap/cache
+
+# Cập nhật bằng cách chép đè không xoá file của module đã bỏ: dọn trước khi
+# nạp ứng dụng (Filament tự nạp mọi Resource / Widget còn nằm trong app/).
+if [ -f scripts/remove-retired-files.sh ]; then
+    bash scripts/remove-retired-files.sh | while read -r line; do log "$line"; done || true
+fi
 
 if [ ! -f vendor/autoload.php ]; then
     log "Chưa có vendor/ → cài thư viện bằng Composer (lần đầu mất vài phút)"

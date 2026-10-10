@@ -27,7 +27,7 @@ class ExpensesTable
                 Columns::code(label: 'Mã'),
                 TextColumn::make('description')
                     ->label('Nội dung chi')
-                    ->description(fn (Expense $record): ?string => implode(' · ', array_filter([$record->project?->name, $record->task?->name])) ?: null)
+                    ->description(fn (Expense $record): ?string => $record->task?->name)
                     ->wrap()
                     ->searchable(),
                 TextColumn::make('employee.name')
@@ -55,12 +55,7 @@ class ExpensesTable
                     ->label('Nhóm chi phí')
                     ->options(BudgetCategory::class)
                     ->multiple(),
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
-                    ->searchable()
-                    ->preload(),
-                Filters::withoutProject(),
+                Filters::withoutTask(),
                 SelectFilter::make('vendor_id')
                     ->label('Nhà cung cấp')
                     ->options(fn (): array => ExpenseForm::supplierOptions())
@@ -76,7 +71,7 @@ class ExpensesTable
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('Chưa có đề nghị chi nào.')
-            ->emptyStateDescription('Tạo đề nghị chi cho một dự án; đề nghị sẽ đi qua các cấp duyệt trước khi thanh toán.')
+            ->emptyStateDescription('Tạo đề nghị chi (gắn với một công việc nếu có); đề nghị sẽ đi qua các cấp duyệt trước khi thanh toán.')
             ->emptyStateActions([
                 CreateAction::make()
                     ->label('+ Tạo đề nghị chi'),

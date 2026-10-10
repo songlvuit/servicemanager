@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Enums\BudgetCategory;
 use App\Enums\PurchaseRequestStatus;
-use App\Models\Concerns\AffectsProjectCosts;
 use App\Models\Concerns\AffectsTaskCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasApprovals;
@@ -16,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Yêu cầu mua hàng của nhóm dự án (mục 24). Trạng thái chỉ do
+ * Yêu cầu mua hàng cho công việc (mục 24). Trạng thái chỉ do
  * App\Services\Purchasing\PurchaseRequestWorkflow ghi.
  */
 class PurchaseRequest extends Model
@@ -25,7 +24,6 @@ class PurchaseRequest extends Model
 
     public const AUDIT_NAME = 'Yêu cầu mua hàng';
 
-    use AffectsProjectCosts;
     use AffectsTaskCosts;
     use HasApprovals;
     use HasDocumentCode;
@@ -39,7 +37,6 @@ class PurchaseRequest extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'project_id',
         'task_id',
         'supplier_id',
         'category',
@@ -86,14 +83,6 @@ class PurchaseRequest extends Model
     public function isOwnedBy(User $user): bool
     {
         return $this->requester_id === $user->getKey();
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
     }
 
     /**

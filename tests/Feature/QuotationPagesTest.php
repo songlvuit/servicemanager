@@ -21,7 +21,7 @@ class QuotationPagesTest extends TestCase
     use BuildsQuotations;
     use RefreshDatabase;
 
-    private User $sales;
+    private User $author;
 
     private User $director;
 
@@ -31,15 +31,15 @@ class QuotationPagesTest extends TestCase
 
         $this->seedAccessControl();
 
-        $this->sales = $this->createUserWithRole(SystemRole::Sales);
+        $this->author = $this->createUserWithRole(SystemRole::Accountant);
         $this->director = $this->createUserWithRole(SystemRole::Director);
     }
 
-    public function test_sales_can_open_quotation_pages(): void
+    public function test_author_can_open_quotation_pages(): void
     {
-        $quotation = $this->makeQuotation(creator: $this->sales);
+        $quotation = $this->makeQuotation(creator: $this->author);
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->author);
 
         $this->get(QuotationResource::getUrl('index'))->assertOk()->assertSee($quotation->code);
         $this->get(QuotationResource::getUrl('create'))->assertOk();
@@ -56,9 +56,9 @@ class QuotationPagesTest extends TestCase
 
     public function test_submitted_quotation_cannot_be_edited_even_by_super_admin(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
 
-        $this->actingAs($this->sales)
+        $this->actingAs($this->author)
             ->get(QuotationResource::getUrl('edit', ['record' => $quotation]))
             ->assertForbidden();
 
@@ -69,7 +69,7 @@ class QuotationPagesTest extends TestCase
 
     public function test_edit_and_delete_respect_status_even_for_super_admin(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
 
         $this->actingAs($this->createUserWithRole(SystemRole::SuperAdmin));
 
@@ -80,11 +80,12 @@ class QuotationPagesTest extends TestCase
             ->assertActionHidden('edit');
     }
 
-    public function test_costs_and_margin_are_hidden_from_sales_but_visible_to_the_director(): void
+    public function test_costs_and_margin_need_the_internal_costs_permission(): void
     {
-        $quotation = $this->makeQuotation(creator: $this->sales);
+        $quotation = $this->makeQuotation(creator: $this->author);
 
-        $this->actingAs($this->sales)
+        // Xem được báo giá nhưng không có quyền "Xem chi phí nội bộ".
+        $this->actingAs($this->createUserWithPermissions(['quotations.view']))
             ->get(QuotationResource::getUrl('view', ['record' => $quotation]))
             ->assertOk()
             ->assertDontSee('Giá vốn')
@@ -99,8 +100,8 @@ class QuotationPagesTest extends TestCase
 
     public function test_low_margin_warning_is_shown_on_the_quotation(): void
     {
-        $healthy = $this->makeQuotation(creator: $this->sales);
-        $lowMargin = $this->makeQuotation([['unit_price' => 10000000, 'estimated_cost' => 9000000]], $this->sales);
+        $healthy = $this->makeQuotation(creator: $this->author);
+        $lowMargin = $this->makeQuotation([['unit_price' => 10000000, 'estimated_cost' => 9000000]], $this->author);
 
         $this->actingAs($this->director);
 
@@ -113,13 +114,13 @@ class QuotationPagesTest extends TestCase
             ->assertSee('Biên lợi nhuận thấp.');
     }
 
-    public function test_sales_can_create_a_quotation_with_items_from_the_form(): void
+    public function test_author_can_create_a_quotation_with_items_from_the_form(): void
     {
         $undoRepeaterFake = Repeater::fake();
 
         $customer = Customer::factory()->create();
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->author);
 
         Livewire::test(CreateQuotation::class)
             ->fillForm([
@@ -155,7 +156,7 @@ class QuotationPagesTest extends TestCase
 
         $this->assertNotNull($quotation);
         $this->assertSame(QuotationStatus::Draft, $quotation->status);
-        $this->assertSame($this->sales->getKey(), $quotation->created_by);
+        $this->assertSame($this->author->getKey(), $quotation->created_by);
         $this->assertSame(2, $quotation->items()->count());
         // 30.000.000 + (12.000.000 − 2.000.000) = 40.000.000; VAT 10% = 4.000.000
         $this->assertSame('40000000.00', $quotation->subtotal);
@@ -165,7 +166,7 @@ class QuotationPagesTest extends TestCase
 
     public function test_quotation_form_requires_a_customer_title_and_valid_dates(): void
     {
-        $this->actingAs($this->sales);
+        $this->actingAs($this->author);
 
         Livewire::test(CreateQuotation::class)
             ->fillForm([
@@ -180,10 +181,10 @@ class QuotationPagesTest extends TestCase
 
     public function test_workflow_buttons_follow_status_and_permissions(): void
     {
-        $quotation = $this->makeQuotation(creator: $this->sales);
+        $quotation = $this->makeQuotation(creator: $this->author);
 
-        // Bản nháp: Sales thấy "Gửi duyệt", không thấy "Duyệt".
-        $this->actingAs($this->sales);
+        // Bản nháp: người lập thấy "Gửi duyệt", không thấy "Duyệt".
+        $this->actingAs($this->author);
 
         Livewire::test(ViewQuotation::class, ['record' => $quotation->getRouteKey()])
             ->assertActionVisible('submit')
@@ -193,7 +194,7 @@ class QuotationPagesTest extends TestCase
 
         $this->assertSame(QuotationStatus::PendingApproval, $quotation->fresh()->status);
 
-        // Chờ duyệt: Sales vẫn không duyệt được.
+        // Chờ duyệt: người lập vẫn không duyệt được.
         Livewire::test(ViewQuotation::class, ['record' => $quotation->getRouteKey()])
             ->assertActionHidden('submit')
             ->assertActionHidden('approve')
@@ -216,7 +217,7 @@ class QuotationPagesTest extends TestCase
 
     public function test_rejecting_from_the_page_requires_a_reason(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
 
         $this->actingAs($this->director);
 
@@ -236,10 +237,10 @@ class QuotationPagesTest extends TestCase
 
     public function test_pending_quotations_are_counted_on_the_menu_for_approvers_only(): void
     {
-        $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
-        $this->makeQuotation(creator: $this->sales);
+        $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
+        $this->makeQuotation(creator: $this->author);
 
-        $this->actingAs($this->sales);
+        $this->actingAs($this->author);
         $this->assertNull(QuotationResource::getNavigationBadge());
 
         $this->actingAs($this->director);

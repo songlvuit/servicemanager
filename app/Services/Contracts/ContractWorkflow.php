@@ -4,7 +4,6 @@ namespace App\Services\Contracts;
 
 use App\Enums\ContractStatus;
 use App\Enums\CustomerStatus;
-use App\Enums\ProjectStatus;
 use App\Exceptions\WorkflowException;
 use App\Models\Contract;
 use App\Models\User;
@@ -33,7 +32,7 @@ class ContractWorkflow extends StatusWorkflow
     }
 
     /**
-     * Chờ ký → Đang hiệu lực (hai bên đã ký). Từ lúc này mới tạo được dự án.
+     * Chờ ký → Đang hiệu lực (hai bên đã ký).
      */
     public function activate(Contract $contract, User $by, ?CarbonInterface $signDate = null): Contract
     {
@@ -62,13 +61,13 @@ class ContractWorkflow extends StatusWorkflow
     }
 
     /**
-     * Đang hiệu lực → Đã hoàn thành. Mọi dự án của hợp đồng phải kết thúc trước.
+     * Đang hiệu lực → Đã hoàn thành. Mọi công việc của hợp đồng phải xong (hoặc huỷ) trước.
      */
     public function complete(Contract $contract, User $by): Contract
     {
         return $this->transition($contract, $by, 'complete', ContractStatus::Completed, function (Contract $contract): array {
-            if ($this->hasOpenProjects($contract)) {
-                throw new WorkflowException('Hợp đồng còn dự án chưa hoàn thành nên chưa thể kết thúc.');
+            if ($this->hasOpenTasks($contract)) {
+                throw new WorkflowException('Hợp đồng còn công việc chưa hoàn thành nên chưa thể kết thúc.');
             }
 
             return [];
@@ -80,18 +79,16 @@ class ContractWorkflow extends StatusWorkflow
         $reason = $this->requireText($reason, 'Vui lòng nhập lý do huỷ hợp đồng.');
 
         return $this->transition($contract, $by, 'cancel', ContractStatus::Cancelled, function (Contract $contract) use ($reason): array {
-            if ($this->hasOpenProjects($contract)) {
-                throw new WorkflowException('Hợp đồng còn dự án đang triển khai. Hãy hoàn thành hoặc huỷ các dự án trước.');
+            if ($this->hasOpenTasks($contract)) {
+                throw new WorkflowException('Hợp đồng còn công việc đang làm. Hãy hoàn thành hoặc huỷ các công việc trước.');
             }
 
             return ['cancel_reason' => $reason];
         });
     }
 
-    private function hasOpenProjects(Contract $contract): bool
+    private function hasOpenTasks(Contract $contract): bool
     {
-        return $contract->projects()
-            ->whereNotIn('status', [ProjectStatus::Completed->value, ProjectStatus::Cancelled->value])
-            ->exists();
+        return $contract->tasks()->open()->exists();
     }
 }

@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Enums\BudgetCategory;
-use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,7 +22,6 @@ class PurchaseOrderFactory extends Factory
     {
         return [
             'supplier_id' => Supplier::factory(),
-            'project_id' => Project::factory(),
             'category' => BudgetCategory::Equipment,
             'order_date' => today(),
         ];

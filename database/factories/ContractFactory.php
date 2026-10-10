@@ -30,7 +30,7 @@ class ContractFactory extends Factory
     }
 
     /**
-     * Hợp đồng đã ký, đang hiệu lực (điều kiện để tạo dự án).
+     * Hợp đồng đã ký, đang hiệu lực (điều kiện để lập nghiệm thu, hóa đơn).
      */
     public function active(): static
     {

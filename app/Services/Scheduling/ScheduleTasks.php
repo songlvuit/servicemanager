@@ -8,7 +8,6 @@ use App\Exceptions\WorkflowException;
 use App\Models\ScheduleEntry;
 use App\Models\ScheduleType;
 use App\Models\Task;
-use App\Services\Tasks\TaskFinancials;
 use App\Support\Audit\AuditLogger;
 use App\Support\Decimal;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +22,6 @@ use Illuminate\Support\Facades\DB;
  *   - Lịch chọn một công việc có sẵn → chỉ gắn thêm vào công việc đó.
  *   - Sửa lịch của một công việc     → công việc đổi theo: tên, ngày giờ, loại
  *     lịch, ê-kíp, địa điểm, trạng thái.
- *   - Đổi dự án của lịch             → công việc và chứng từ của nó chuyển theo.
  *   - Xoá lịch                       → công việc do lịch tạo ra bị xoá theo nếu
  *     chưa có gì gắn vào.
  *
@@ -31,8 +29,6 @@ use Illuminate\Support\Facades\DB;
  */
 class ScheduleTasks
 {
-    public function __construct(private readonly TaskFinancials $financials) {}
-
     /**
      * Gọi TRONG transaction, ngay TRƯỚC khi lưu lịch: $entry đã nhận dữ liệu
      * mới nhưng chưa lưu, nên còn biết cột nào vừa đổi.
@@ -61,9 +57,8 @@ class ScheduleTasks
             $task = Task::query()->find($requested)
                 ?? throw new WorkflowException('Công việc đã chọn không còn tồn tại.');
 
-            // Lịch gắn thêm: cùng dự án với công việc, nhưng không phải lịch của chính công việc.
+            // Lịch gắn thêm vào một công việc có sẵn: không phải lịch của chính công việc đó.
             $entry->task_id = $task->getKey();
-            $entry->project_id = $task->project_id;
             $entry->from_task = false;
 
             if ($current !== null) {
@@ -175,7 +170,6 @@ class ScheduleTasks
         }
 
         $task = new Task([
-            'project_id' => $entry->project_id,
             'name' => $entry->title,
             'status' => $status,
             'description' => $entry->notes,
@@ -195,11 +189,6 @@ class ScheduleTasks
      */
     private function propagate(ScheduleEntry $entry, Task $task, array $crewIds): Task
     {
-        // Đổi dự án luôn kéo theo cả công việc, dù công việc tạo tay hay dùng chung.
-        if ($entry->isDirty('project_id')) {
-            $this->financials->moveToProject($task, $entry->project_id !== null ? (int) $entry->project_id : null);
-        }
-
         // Chỉ lịch của chính công việc mới ghi ngược về công việc; lịch gắn thêm thì không.
         if (! $entry->from_task) {
             return $task;
@@ -256,7 +245,7 @@ class ScheduleTasks
             'location' => $entry->location,
             'equipment' => $entry->equipment,
             'external_crew' => $entry->external_crew,
-            'customer_id' => $entry->project_id !== null ? null : $entry->customer_id,
+            'customer_id' => $task->contract_id !== null || $task->quotation_id !== null ? $task->customer_id : $entry->customer_id,
             'is_tentative' => $entry->status === ScheduleStatus::Tentative,
         ]);
     }

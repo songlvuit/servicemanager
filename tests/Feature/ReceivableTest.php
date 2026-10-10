@@ -116,12 +116,12 @@ class ReceivableTest extends TestCase
 
     public function test_receivable_screen_uses_its_own_permission(): void
     {
-        // Sales có quyền xem công nợ.
-        $this->actingAs($this->createUserWithRole(SystemRole::Sales))
+        // Công nợ có quyền riêng, không đi kèm quyền hóa đơn.
+        $this->actingAs($this->createUserWithPermissions(['receivables.view']))
             ->get(ReceivableResource::getUrl('index'))
             ->assertOk();
 
-        // Quản lý dự án không có quyền xem công nợ; màn hình chỉ xem với mọi người.
+        // Quản lý công việc và Kinh doanh không có quyền xem công nợ; màn hình chỉ xem với mọi người.
         $this->actingAs($this->createUserWithRole(SystemRole::ProjectManager))
             ->get(ReceivableResource::getUrl('index'))
             ->assertForbidden();

@@ -73,8 +73,7 @@ class RolesAndPermissionsTest extends TestCase
         $sales = $this->createUserWithRole(SystemRole::Sales);
 
         $this->assertTrue($sales->can('customers.create'));
-        $this->assertTrue($sales->can('quotations.update'));
-        $this->assertFalse($sales->can('quotations.approve'));
+        $this->assertTrue($sales->can('opportunities.create'));
         $this->assertFalse($sales->can('internal_costs.view'));
         $this->assertFalse($sales->can('expenses.view'));
         $this->assertFalse($sales->can('users.view'));
@@ -88,10 +87,35 @@ class RolesAndPermissionsTest extends TestCase
         $this->assertTrue($accountant->can('payments.create'));
         $this->assertTrue($accountant->can('expenses.pay'));
         $this->assertFalse($accountant->can('customers.create'));
-        $this->assertFalse($accountant->can('quotations.view'));
+        // Kế toán lập báo giá, hợp đồng; duyệt vẫn là việc của Giám đốc.
+        $this->assertTrue($accountant->can('quotations.create'));
+        $this->assertTrue($accountant->can('contracts.update'));
+        $this->assertFalse($accountant->can('quotations.approve'));
+        $this->assertFalse($accountant->can('contracts.approve'));
     }
 
-    public function test_employee_has_only_basic_project_permissions(): void
+    /**
+     * Nội dung hợp đồng, báo giá chỉ Giám đốc và Kế toán xem được.
+     */
+    public function test_only_director_and_accountant_can_see_contracts_and_quotations(): void
+    {
+        foreach ([SystemRole::Director, SystemRole::Accountant] as $role) {
+            $user = $this->createUserWithRole($role);
+
+            $this->assertTrue($user->can('contracts.view'), $role->value);
+            $this->assertTrue($user->can('quotations.view'), $role->value);
+        }
+
+        foreach ([SystemRole::Sales, SystemRole::ProjectManager, SystemRole::Procurement, SystemRole::Employee] as $role) {
+            $user = $this->createUserWithRole($role);
+
+            foreach (['contracts', 'quotations', 'acceptances', 'invoices', 'receivables', 'payments'] as $module) {
+                $this->assertFalse($user->can("{$module}.view"), "{$role->value} không được xem {$module}");
+            }
+        }
+    }
+
+    public function test_employee_has_only_basic_task_permissions(): void
     {
         $employee = $this->createUserWithRole(SystemRole::Employee);
 
@@ -99,7 +123,8 @@ class RolesAndPermissionsTest extends TestCase
         $this->assertTrue($employee->can('expenses.create'));
         $this->assertFalse($employee->can('quotations.approve'));
         $this->assertFalse($employee->can('invoices.view'));
-        $this->assertFalse($employee->can('projects.create'));
+        $this->assertFalse($employee->can('tasks.create'));
+        $this->assertFalse($employee->can('tasks.view_all'));
     }
 
     public function test_wildcard_patterns_expand_to_catalog_permissions(): void

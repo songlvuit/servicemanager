@@ -8,7 +8,7 @@ use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\Access;
 use App\Filament\Support\Columns;
-use App\Filament\Support\Filters;
+use App\Filament\Support\ContractLink;
 use App\Models\Task;
 use App\Support\Decimal;
 use App\Support\Money;
@@ -22,23 +22,36 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Bảng công việc, dùng chung cho màn hình Công việc và tab Công việc của dự án.
+ * Bảng công việc, dùng chung cho màn hình Công việc và tab Công việc của hợp đồng.
+ * Cột và bộ lọc Hợp đồng chỉ có với người được xem hợp đồng.
  */
 class TasksTable
 {
-    public static function configure(Table $table, bool $withProject = true): Table
+    public static function configure(Table $table, bool $withContract = true): Table
     {
+        $showContract = $withContract && ContractLink::canSeeContracts();
+
         return $table
             ->columns([
                 TextColumn::make('name')
                     ->label('Công việc')
                     ->weight(FontWeight::Medium)
-                    ->description(fn (Task $record): ?string => $withProject
-                        ? ($record->project !== null ? $record->project->code.' — '.$record->project->name : 'Việc độc lập')
-                        : $record->parent?->name)
+                    ->description(fn (Task $record): ?string => implode(' · ', array_filter([
+                        $record->customer?->name,
+                        $record->parent !== null ? 'thuộc: '.$record->parent->name : null,
+                    ])) ?: null)
                     ->wrap()
+                    // Đủ rộng để tên và khách hàng không bị bẻ thành nhiều dòng ngắn.
+                    ->extraCellAttributes(['style' => 'min-width: 18rem'])
                     ->searchable()
                     ->sortable(),
+                // Cột hợp đồng chỉ CÓ trong bảng của người được xem hợp đồng (không chỉ ẩn đi).
+                ...($showContract ? [
+                    TextColumn::make('contract.code')
+                        ->label('Hợp đồng')
+                        ->placeholder('—')
+                        ->toggleable(),
+                ] : []),
                 TextColumn::make('assignee.name')
                     ->label('Người phụ trách')
                     ->placeholder('Chưa giao')
@@ -70,7 +83,9 @@ class TasksTable
                     ->alignEnd()
                     ->sortable(),
                 // Một cột cho cả hai số: chi phí thực tế ở trên, ngân sách (nếu có đặt) ở dưới.
-                Columns::money('actual_cost', 'Chi phí / ngân sách', summarize: true)
+                // Không cộng tổng ở cuối bảng: số của công việc cha đã gồm các công việc con,
+                // cộng dồn sẽ trùng — tổng chi phí xem ở Báo cáo chi phí.
+                Columns::money('actual_cost', 'Chi phí / ngân sách')
                     ->formatStateUsing(fn (Task $record): string => $record->hasBudget() || Decimal::isPositive($record->actual_cost)
                         ? Money::format($record->actual_cost)
                         : '—')
@@ -82,7 +97,7 @@ class TasksTable
                     ->color(fn (Task $record): ?string => $record->isOverBudget() ? 'danger' : null)
                     ->visible(fn (): bool => Access::canSeeCosts())
                     ->toggleable(),
-                Columns::money('budget', 'Ngân sách', summarize: true)
+                Columns::money('budget', 'Ngân sách')
                     ->visible(fn (): bool => Access::canSeeCosts())
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('estimated_hours')
@@ -109,20 +124,30 @@ class TasksTable
                     ->label('Người phụ trách')
                     ->options(fn (): array => TaskForm::userOptions())
                     ->searchable(),
-                Filters::withoutProject('Chỉ việc độc lập')->visible($withProject),
+                ...($showContract ? [
+                    SelectFilter::make('contract_id')
+                        ->label('Hợp đồng')
+                        ->options(fn (): array => ContractLink::contractOptions())
+                        ->searchable(),
+                    Filter::make('without_contract')
+                        ->label('Chưa gắn hợp đồng')
+                        ->toggle()
+                        ->query(fn (Builder $query): Builder => $query->whereNull('contract_id')),
+                ] : []),
                 Filter::make('overdue')
                     ->label('Chỉ việc quá hạn')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => $query->overdue()),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->mutateRecordDataUsing(fn (array $data): array => TaskForm::state($data)),
                 DeleteAction::make(),
             ])
             // Bấm vào dòng để mở trang công việc: ngân sách, chi phí, mua hàng, giờ công, lịch.
             ->recordUrl(fn (Task $record): string => TaskResource::getUrl('view', ['record' => $record]))
             ->defaultSort('due_date')
             ->emptyStateHeading('Chưa có công việc nào.')
-            ->emptyStateDescription('Tạo công việc (thuộc dự án hoặc việc độc lập), giao người phụ trách và theo dõi tiến độ.');
+            ->emptyStateDescription('Tạo công việc, giao người phụ trách, đặt ngày để lên lịch và theo dõi tiến độ, chi phí.');
     }
 }

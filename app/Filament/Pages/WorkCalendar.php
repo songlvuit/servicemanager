@@ -3,7 +3,6 @@
 namespace App\Filament\Pages;
 
 use App\Exceptions\WorkflowException;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\Access;
 use App\Filament\Support\Scheduling\ScheduleForm;
@@ -40,12 +39,12 @@ use Throwable;
 use UnitEnum;
 
 /**
- * Lịch làm việc chung của công ty: ai làm việc gì, lúc nào, ở đâu, cho dự án
- * nào. Mọi người dùng đều xem được.
+ * Lịch làm việc chung của công ty: ai làm việc gì, lúc nào, ở đâu, cho khách
+ * hàng nào. Mọi người dùng đều xem được.
  *
  * Trang này CHỈ ĐỂ XEM lịch công việc: lịch tự lấy từ Công việc (công việc có
- * ngày bắt đầu) và mốc của Dự án, nên không có nút thêm / sửa / xoá lịch công
- * việc — việc đó làm ở mục Công việc. Ở đây chỉ còn: đăng ký nghỉ, sửa / xoá
+ * ngày bắt đầu), nên không có nút thêm / sửa / xoá lịch công việc — việc đó
+ * làm ở mục Công việc. Ở đây chỉ còn: đăng ký nghỉ, sửa / xoá
  * lịch nghỉ, ghi giờ công từ lịch và chia sẻ lịch.
  *
  * Bốn cách xem: tuần (sáng / chiều), tháng, theo người, lịch của tôi.
@@ -83,9 +82,6 @@ class WorkCalendar extends Page
 
     #[Url]
     public ?string $person = null;
-
-    #[Url]
-    public ?string $project = null;
 
     #[Url]
     public bool $cancelled = false;
@@ -136,7 +132,7 @@ class WorkCalendar extends Page
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Lịch chung của cả công ty, tự lấy từ Công việc và Dự án. Muốn thêm hoặc đổi lịch, hãy tạo / sửa công việc ở mục Công việc.';
+        return 'Lịch chung của cả công ty, tự lấy từ mục Công việc. Muốn thêm hoặc đổi lịch, hãy tạo / sửa công việc ở mục Công việc.';
     }
 
     // --- Điều hướng ---------------------------------------------------------
@@ -184,7 +180,7 @@ class WorkCalendar extends Page
 
     public function clearFilters(): void
     {
-        $this->reset('type', 'person', 'project', 'cancelled');
+        $this->reset('type', 'person', 'cancelled');
     }
 
     private function shift(int $direction): void
@@ -218,7 +214,7 @@ class WorkCalendar extends Page
                 'agenda' => $query->agenda($user, $anchor, 30),
                 'conflicts' => app(ScheduleConflicts::class)->among($query->entries($anchor, $anchor->addDays(29)->endOfDay())),
             ],
-            default => $query->week($anchor, $filters, $user),
+            default => $query->week($anchor, $filters),
         };
 
         return [
@@ -226,20 +222,18 @@ class WorkCalendar extends Page
             'views' => self::VIEWS,
             'types' => ScheduleType::query()->active()->ordered()->get(),
             'people' => ScheduleForm::userOptions(),
-            'projects' => ScheduleForm::projectOptions($this->project),
-            'hasFilters' => filled($this->type) || filled($this->person) || filled($this->project) || $this->cancelled,
+            'hasFilters' => filled($this->type) || filled($this->person) || $this->cancelled,
         ];
     }
 
     /**
-     * @return array{type: ?string, user: ?string, project: ?string, cancelled: bool}
+     * @return array{type: ?string, user: ?string, cancelled: bool}
      */
     private function filters(): array
     {
         return [
             'type' => $this->type ?: null,
             'user' => $this->person ?: null,
-            'project' => $this->project ?: null,
             'cancelled' => $this->cancelled,
         ];
     }
@@ -366,11 +360,7 @@ class WorkCalendar extends Page
             ->modalDescription(function (array $arguments): string {
                 $entry = $this->findEntry($arguments);
 
-                return $entry === null ? '' : implode(' · ', array_filter([
-                    $entry->title,
-                    $entry->project?->code ?? 'Không gắn dự án',
-                    'ê-kíp: '.$entry->crew->pluck('name')->implode(', '),
-                ]));
+                return $entry === null ? '' : $entry->title.' · ê-kíp: '.$entry->crew->pluck('name')->implode(', ');
             })
             ->modalSubmitActionLabel('Ghi giờ công')
             ->modalWidth(Width::Large)
@@ -385,7 +375,7 @@ class WorkCalendar extends Page
                     ->maxValue(24)
                     ->required()
                     ->suffix('giờ')
-                    ->helperText('Mỗi người trong ê-kíp được ghi số giờ này cho từng ngày của lịch, vào dự án của lịch (nếu có). Người / ngày đã ghi rồi sẽ được bỏ qua. Lịch chuyển sang "Đã xong".'),
+                    ->helperText('Mỗi người trong ê-kíp được ghi số giờ này cho từng ngày của lịch, vào công việc của lịch. Người / ngày đã ghi rồi sẽ được bỏ qua. Lịch chuyển sang "Đã xong".'),
             ])
             ->action(function (array $data, array $arguments): void {
                 $this->guarded(function () use ($data, $arguments): void {
@@ -399,11 +389,7 @@ class WorkCalendar extends Page
 
                     Notification::make()
                         ->title($created > 0 ? "Đã ghi {$created} dòng giờ công." : 'Giờ công của lịch này đã được ghi từ trước.')
-                        ->body(match (true) {
-                            $created === 0 => null,
-                            $entry->project !== null => 'Chi phí nhân sự đã được cộng vào dự án '.$entry->project->code.'.',
-                            default => 'Lịch không gắn dự án nên chi phí nhân sự được tính là chi phí chung.',
-                        })
+                        ->body($created > 0 ? 'Chi phí nhân sự đã được cộng vào công việc của lịch.' : null)
                         ->success()
                         ->send();
                 });
@@ -646,7 +632,7 @@ class WorkCalendar extends Page
         $id = (int) ($arguments['entry'] ?? 0);
 
         return $id > 0
-            ? ScheduleEntry::query()->with(['type', 'crew', 'project', 'customer', 'creator', 'task'])->find($id)
+            ? ScheduleEntry::query()->with(['type', 'crew', 'customer', 'creator', 'task'])->find($id)
             : null;
     }
 
@@ -682,14 +668,6 @@ class WorkCalendar extends Page
                 ->badge(),
             $text('crew', $entry->isLeave() ? 'Người nghỉ' : 'Ê-kíp', $entry->crewLabel() ?: null)
                 ->columnSpanFull(),
-            TextEntry::make('project')
-                ->label('Dự án')
-                ->state($entry->project ? $entry->project->code.' — '.$entry->project->name : null)
-                ->url($entry->project !== null && ProjectResource::canView($entry->project)
-                    ? ProjectResource::getUrl('view', ['record' => $entry->project])
-                    : null)
-                ->placeholder('Không gắn dự án')
-                ->hidden($entry->isLeave()),
             $text('customer', 'Khách hàng', $entry->customer?->name)
                 ->hidden($entry->isLeave()),
             TextEntry::make('task')

@@ -10,7 +10,6 @@ use App\Filament\Resources\Contracts\ContractResource;
 use App\Filament\Resources\Expenses\ExpenseResource;
 use App\Filament\Resources\Invoices\InvoiceResource;
 use App\Filament\Resources\Payments\PaymentResource;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\PurchaseRequests\PurchaseRequestResource;
 use App\Filament\Resources\Quotations\QuotationResource;
 use App\Filament\Resources\Receivables\ReceivableResource;
@@ -67,13 +66,13 @@ class ActionItems
             );
         }
 
-        if ($user->can('projects.view') && $user->can('internal_costs.view')) {
+        if ($user->can('tasks.view') && $user->can('internal_costs.view')) {
             $add(
-                'projects_over_budget',
+                'tasks_over_budget',
                 self::DANGER,
-                self::live(ProjectResource::getEloquentQuery())->overBudget()->count(),
-                'dự án vượt ngân sách',
-                ProjectResource::getUrl('index', ['tab' => 'over_budget']),
+                self::live(TaskResource::getEloquentQuery())->overBudget()->count(),
+                'công việc vượt ngân sách',
+                TaskResource::getUrl('index', ['tab' => 'over_budget']),
             );
         }
 
@@ -138,7 +137,7 @@ class ActionItems
         }
 
         if ($user->can('contracts.view')) {
-            $days = (int) config('project.contract_expiry_warning_days', 30);
+            $days = (int) config('job.contract_expiry_warning_days', 30);
 
             $add(
                 'contracts_expiring',

@@ -58,7 +58,7 @@ enum PurchaseOrderStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * Đã đặt hàng: tính vào chi phí cam kết của dự án.
+     * Đã đặt hàng: tính vào chi phí cam kết của công việc.
      */
     public function isCommitted(): bool
     {
@@ -66,7 +66,7 @@ enum PurchaseOrderStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * Đã nhận hàng: tính vào chi phí thực tế của dự án.
+     * Đã nhận hàng: tính vào chi phí thực tế của công việc.
      */
     public function isActual(): bool
     {

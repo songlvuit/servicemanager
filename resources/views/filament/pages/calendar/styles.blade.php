@@ -75,7 +75,7 @@
     .dark .sm-entry-line.is-conflict { color: var(--danger-400); }
     .sm-entry-line.is-conflict svg { opacity: 1; }
 
-    /* Dải nhỏ: nghỉ phép, mốc dự án, lịch trên lưới tháng / theo người */
+    /* Dải nhỏ: nghỉ phép, lịch trên lưới tháng / theo người */
     .sm-chip { display: flex; align-items: center; gap: .3125rem; width: 100%; min-width: 0; padding: .1875rem .4375rem; border-radius: .375rem; font-size: .75rem; line-height: 1.35; text-align: left; background: color-mix(in oklab, var(--c, var(--gray-500)) 13%, transparent); border-left: 3px solid var(--c, var(--gray-400)); }
     button.sm-chip { cursor: pointer; }
     button.sm-chip:hover, button.sm-chip:focus-visible { background: color-mix(in oklab, var(--c, var(--gray-500)) 24%, transparent); }
@@ -83,7 +83,6 @@
     .sm-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
     .sm-chip svg { flex: none; width: .8125rem; height: .8125rem; opacity: .75; }
     .sm-chip.is-leave { --c: var(--gray-400); background-image: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in oklab, var(--gray-500) 12%, transparent) 5px 6px); }
-    .sm-chip.is-milestone { border-left-color: transparent; background: transparent; color: var(--ink-2); padding-left: .125rem; }
     .sm-chip.is-cancelled { opacity: .55; text-decoration: line-through; }
     .sm-chip.is-conflict { box-shadow: 0 0 0 1.5px var(--danger-500); }
 

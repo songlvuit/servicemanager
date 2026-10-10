@@ -7,9 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Một dòng CHI PHÍ THỰC TẾ (trước thuế), đọc từ view `project_cost_lines`:
+ * Một dòng CHI PHÍ THỰC TẾ (trước thuế), đọc từ view `cost_lines`:
  * đề nghị chi đã thanh toán, đơn mua hàng đã nhận hàng và giờ công đã chấm.
- * Dòng không gắn dự án (project_id rỗng) là chi phí chung của công ty.
+ * Dòng không gắn công việc (task_id rỗng) là chi phí chung của công ty.
  * Chỉ đọc — dùng cho báo cáo và biểu đồ.
  */
 class CostLine extends Model
@@ -20,7 +20,7 @@ class CostLine extends Model
         'timesheet' => 'Chấm công',
     ];
 
-    protected $table = 'project_cost_lines';
+    protected $table = 'cost_lines';
 
     protected $keyType = 'string';
 
@@ -43,14 +43,6 @@ class CostLine extends Model
     public function sourceLabel(): string
     {
         return self::SOURCES[$this->source] ?? (string) $this->source;
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
     }
 
     /**

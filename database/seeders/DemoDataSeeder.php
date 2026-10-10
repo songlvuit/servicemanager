@@ -38,8 +38,10 @@ class DemoDataSeeder extends Seeder
 
         $sales = User::query()->where('email', 'sales@example.com')->first();
         $director = User::query()->where('email', 'director@example.com')->first();
+        // Báo giá do Kế toán lập, Giám đốc duyệt (Kinh doanh không xem được báo giá).
+        $accountant = User::query()->where('email', 'accounting@example.com')->first();
 
-        if ($sales === null || $director === null) {
+        if ($sales === null || $director === null || $accountant === null) {
             $this->command?->warn('Bỏ qua DemoDataSeeder: chưa có tài khoản mẫu (chạy DevUserSeeder trước).');
 
             return;
@@ -49,7 +51,7 @@ class DemoDataSeeder extends Seeder
         $customers = $this->seedCustomers($sales);
         $opportunities = $this->seedOpportunities($customers, $sales);
 
-        $this->seedQuotations($workflow, $customers, $opportunities, $services, $sales, $director);
+        $this->seedQuotations($workflow, $customers, $opportunities, $services, $accountant, $director);
     }
 
     /**
@@ -196,7 +198,7 @@ class DemoDataSeeder extends Seeder
         array $customers,
         array $opportunities,
         array $services,
-        User $sales,
+        User $author,
         User $director,
     ): void {
         /*
@@ -228,7 +230,7 @@ class DemoDataSeeder extends Seeder
                 'quotation_date' => $date,
                 'valid_until' => $date->copy()->addDays((int) config('quotation.validity_days')),
             ]);
-            $quotation->created_by = $sales->getKey();
+            $quotation->created_by = $author->getKey();
             $quotation->save();
 
             foreach ($items as $order => [$serviceKey, $quantity, $discount]) {
@@ -249,26 +251,26 @@ class DemoDataSeeder extends Seeder
 
             $workflow->recalculate($quotation);
 
-            $this->advance($workflow, $quotation, $finalStatus, $sales, $director);
+            $this->advance($workflow, $quotation, $finalStatus, $author, $director);
         }
 
         // Báo giá "expired" có ngày hiệu lực đã qua: chạy đúng tác vụ hằng ngày.
         $workflow->expireOverdue();
     }
 
-    private function advance(QuotationWorkflow $workflow, Quotation $quotation, string $finalStatus, User $sales, User $director): void
+    private function advance(QuotationWorkflow $workflow, Quotation $quotation, string $finalStatus, User $author, User $director): void
     {
         if ($finalStatus === 'draft') {
             return;
         }
 
         if ($finalStatus === 'cancelled') {
-            $workflow->cancel($quotation, $sales, 'Khách hàng thay đổi kế hoạch.');
+            $workflow->cancel($quotation, $author, 'Khách hàng thay đổi kế hoạch.');
 
             return;
         }
 
-        $workflow->submit($quotation, $sales);
+        $workflow->submit($quotation, $author);
 
         if ($finalStatus === 'pending') {
             return;
@@ -287,10 +289,10 @@ class DemoDataSeeder extends Seeder
         }
 
         // sent, accepted, expired đều đã gửi khách.
-        $workflow->markSent($quotation, $sales);
+        $workflow->markSent($quotation, $author);
 
         if ($finalStatus === 'accepted') {
-            $workflow->markAccepted($quotation, $sales);
+            $workflow->markAccepted($quotation, $author);
         }
     }
 }

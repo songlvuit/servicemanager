@@ -42,7 +42,6 @@ class RevenueReport extends ReportPage
                 'Số hóa đơn' => 'code',
                 'Khách hàng' => 'customer.name',
                 'Hợp đồng' => 'contract.code',
-                'Dự án' => 'project.name',
                 'Trạng thái' => 'status',
                 'Doanh thu (trước thuế)' => 'subtotal',
                 'Thuế GTGT' => 'tax',
@@ -57,7 +56,7 @@ class RevenueReport extends ReportPage
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => Invoice::query()->billed()->with(['customer', 'project', 'contract']))
+            ->query(fn (): Builder => Invoice::query()->billed()->with(['customer', 'contract']))
             ->columns([
                 TextColumn::make('invoice_date')
                     ->label('Ngày hóa đơn')
@@ -75,8 +74,9 @@ class RevenueReport extends ReportPage
                     ->label('Khách hàng')
                     ->searchable()
                     ->wrap(),
-                TextColumn::make('project.name')
-                    ->label('Dự án')
+                TextColumn::make('contract.code')
+                    ->label('Hợp đồng')
+                    ->description(fn (Invoice $record): ?string => $record->contract?->title)
                     ->placeholder('—')
                     ->wrap()
                     ->toggleable(),
@@ -102,9 +102,9 @@ class RevenueReport extends ReportPage
                     ->relationship('customer', 'name')
                     ->searchable()
                     ->preload(),
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
+                SelectFilter::make('contract_id')
+                    ->label('Hợp đồng')
+                    ->relationship('contract', 'code')
                     ->searchable()
                     ->preload(),
                 // Hóa đơn thuộc hợp đồng lập từ báo giá có dịch vụ này.
@@ -126,7 +126,7 @@ class RevenueReport extends ReportPage
             ])
             ->groups([
                 Group::make('customer.name')->label('Khách hàng')->collapsible(),
-                Group::make('project.name')->label('Dự án')->collapsible(),
+                Group::make('contract.code')->label('Hợp đồng')->collapsible(),
             ])
             ->defaultSort('invoice_date', 'desc')
             ->paginated([25, 50, 100])

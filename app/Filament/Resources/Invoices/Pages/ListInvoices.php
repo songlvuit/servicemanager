@@ -22,7 +22,6 @@ class ListInvoices extends ListRecords
                 'Số hóa đơn' => 'code',
                 'Khách hàng' => 'customer.name',
                 'Hợp đồng' => 'contract.code',
-                'Dự án' => 'project.name',
                 'Nội dung' => 'description',
                 'Ngày hóa đơn' => 'invoice_date',
                 'Hạn thanh toán' => 'due_date',

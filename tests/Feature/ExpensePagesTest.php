@@ -11,17 +11,18 @@ use App\Filament\Resources\Expenses\Pages\CreateExpense;
 use App\Filament\Resources\Expenses\Pages\ListExpenses;
 use App\Filament\Resources\Expenses\Pages\ViewExpense;
 use App\Models\Expense;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\BuildsExpenses;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 class ExpensePagesTest extends TestCase
 {
     use BuildsExpenses;
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     private User $employee;
@@ -43,14 +44,13 @@ class ExpensePagesTest extends TestCase
 
     public function test_employee_creates_an_expense_request_from_the_form(): void
     {
-        $project = $this->makeProject();
-        $project->memberships()->create(['user_id' => $this->employee->getKey()]);
+        $task = Task::factory()->create(['assignee_id' => $this->employee->getKey()]);
 
         $this->actingAs($this->employee);
 
         Livewire::test(CreateExpense::class)
             ->fillForm([
-                'project_id' => $project->getKey(),
+                'task_id' => $task->getKey(),
                 'category' => BudgetCategory::Travel->value,
                 'description' => 'Taxi đi quay ngoại cảnh',
                 'expense_date' => today()->toDateString(),
@@ -65,6 +65,7 @@ class ExpensePagesTest extends TestCase
 
         $this->assertNotNull($expense);
         $this->assertSame($this->employee->getKey(), $expense->employee_id);
+        $this->assertSame($task->getKey(), $expense->task_id);
         $this->assertSame(ExpenseStatus::Draft, $expense->status);
         $this->assertSame('495000.00', $expense->total_amount);
         $this->assertSame(BudgetCategory::Travel, $expense->category);
@@ -75,11 +76,11 @@ class ExpensePagesTest extends TestCase
         $this->actingAs($this->employee);
 
         Livewire::test(CreateExpense::class)
-            ->fillForm(['project_id' => null, 'category' => null, 'description' => '', 'amount' => 0])
+            ->fillForm(['task_id' => null, 'category' => null, 'description' => '', 'amount' => 0])
             ->call('create')
             ->assertHasFormErrors(['category', 'description', 'amount'])
-            // Dự án không bắt buộc: khoản chi có thể là chi phí chung.
-            ->assertHasNoFormErrors(['project_id']);
+            // Công việc không bắt buộc: khoản chi có thể là chi phí chung.
+            ->assertHasNoFormErrors(['task_id']);
     }
 
     public function test_pages_follow_ownership_and_status(): void

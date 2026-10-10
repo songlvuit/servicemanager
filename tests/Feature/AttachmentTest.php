@@ -20,7 +20,7 @@ class AttachmentTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $sales;
+    private User $accountant;
 
     private Contract $contract;
 
@@ -32,13 +32,13 @@ class AttachmentTest extends TestCase
 
         Storage::fake(config('uploads.disk'));
 
-        $this->sales = $this->createUserWithRole(SystemRole::Sales);
+        $this->accountant = $this->createUserWithRole(SystemRole::Accountant);
         $this->contract = Contract::factory()->create();
     }
 
     public function test_user_uploads_a_document_to_a_contract(): void
     {
-        $this->actingAs($this->sales);
+        $this->actingAs($this->accountant);
 
         $this->manager()
             ->callAction(TestAction::make('create')->table(), [
@@ -52,14 +52,14 @@ class AttachmentTest extends TestCase
         $this->assertNotNull($attachment);
         $this->assertSame('hop-dong-da-ky.pdf', $attachment->filename);
         $this->assertSame('Hợp đồng', $attachment->category);
-        $this->assertSame($this->sales->getKey(), $attachment->uploaded_by);
+        $this->assertSame($this->accountant->getKey(), $attachment->uploaded_by);
         $this->assertSame(config('uploads.disk'), $attachment->disk);
         Storage::disk($attachment->disk)->assertExists($attachment->path);
     }
 
     public function test_disallowed_file_types_and_oversized_files_are_rejected(): void
     {
-        $this->actingAs($this->sales);
+        $this->actingAs($this->accountant);
 
         $this->manager()
             ->callAction(TestAction::make('create')->table(), [
@@ -82,8 +82,8 @@ class AttachmentTest extends TestCase
 
     public function test_upload_button_requires_permission_to_manage_the_document(): void
     {
-        // Giám đốc xem được hợp đồng nhưng không có quyền sửa nên không tải file lên được.
-        $this->actingAs($this->createUserWithRole(SystemRole::Director));
+        // Xem được hợp đồng nhưng không có quyền sửa thì không tải file lên được.
+        $this->actingAs($this->createUserWithPermissions(['contracts.view']));
 
         $this->manager()->assertActionHidden(TestAction::make('create')->table());
     }
@@ -94,7 +94,7 @@ class AttachmentTest extends TestCase
 
         $this->get($attachment->url())->assertRedirect('/admin/login');
 
-        $this->actingAs($this->sales)
+        $this->actingAs($this->accountant)
             ->get($attachment->url())
             ->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff');
@@ -105,7 +105,7 @@ class AttachmentTest extends TestCase
             ->assertForbidden();
 
         // Tài khoản đã bị khoá.
-        $this->actingAs($this->createUserWithRole(SystemRole::Sales, ['is_active' => false]))
+        $this->actingAs($this->createUserWithRole(SystemRole::Accountant, ['is_active' => false]))
             ->get($attachment->url())
             ->assertForbidden();
     }

@@ -7,7 +7,7 @@ use App\Filament\Support\ChartPalette;
 use Filament\Support\RawJs;
 
 /**
- * Chi phí theo tháng (mục 35): chi phí thực tế của các dự án — đề nghị chi đã
+ * Chi phí theo tháng (mục 35): chi phí thực tế của công ty — đề nghị chi đã
  * thanh toán, đơn mua hàng đã nhận và giờ công.
  */
 class ExpenseByMonth extends FinanceChart

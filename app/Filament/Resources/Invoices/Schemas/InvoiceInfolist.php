@@ -6,7 +6,6 @@ use App\Enums\InvoiceStatus;
 use App\Filament\Resources\Acceptances\AcceptanceResource;
 use App\Filament\Resources\Contracts\ContractResource;
 use App\Filament\Resources\Customers\CustomerResource;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Support\Columns;
 use App\Models\Invoice;
 use App\Support\Decimal;
@@ -74,12 +73,6 @@ class InvoiceInfolist
                             ->label('Hợp đồng')
                             ->url(fn (Invoice $record): ?string => $record->contract !== null && ContractResource::canView($record->contract)
                                 ? ContractResource::getUrl('view', ['record' => $record->contract])
-                                : null),
-                        TextEntry::make('project.name')
-                            ->label('Dự án')
-                            ->placeholder('—')
-                            ->url(fn (Invoice $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
-                                ? ProjectResource::getUrl('view', ['record' => $record->project])
                                 : null),
                         TextEntry::make('acceptance.code')
                             ->label('Biên bản nghiệm thu')

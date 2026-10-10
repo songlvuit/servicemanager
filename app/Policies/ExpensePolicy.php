@@ -9,7 +9,7 @@ use App\Services\Approvals\ApprovalService;
 /**
  * Quyền trên đề nghị chi.
  *
- *  - Người không có quyền "Xem tất cả" chỉ thấy đề nghị của mình và của dự án mình quản lý.
+ *  - Người không có quyền "Xem tất cả" chỉ thấy đề nghị của mình và của công việc mình phụ trách.
  *  - Người đề nghị tự sửa / gửi duyệt / xoá bản nháp của mình; người có quyền Sửa làm được cho mọi bản nháp.
  *  - Duyệt: người đang giữ vai trò của bước duyệt hiện tại (cấu hình ở Hệ thống → Quy trình
  *    duyệt), không phải người đề nghị — xem ApprovalService.

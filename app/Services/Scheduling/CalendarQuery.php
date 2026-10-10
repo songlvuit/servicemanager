@@ -2,8 +2,6 @@
 
 namespace App\Services\Scheduling;
 
-use App\Enums\ProjectStatus;
-use App\Models\Project;
 use App\Models\ScheduleEntry;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -15,8 +13,8 @@ use Illuminate\Support\Collection;
  * Đọc lịch làm việc và sắp xếp thành các dạng hiển thị: tuần (sáng / chiều),
  * tháng, theo người, và danh sách theo ngày của một người.
  *
- * Bộ lọc: ['type' => id loại lịch, 'user' => id người, 'project' => id dự án,
- * 'cancelled' => true để hiện cả lịch đã huỷ].
+ * Bộ lọc: ['type' => id loại lịch, 'user' => id người, 'cancelled' => true để
+ * hiện cả lịch đã huỷ].
  */
 class CalendarQuery
 {
@@ -28,19 +26,18 @@ class CalendarQuery
     public function __construct(private readonly ScheduleConflicts $conflicts) {}
 
     /**
-     * Lịch có phần nằm trong [$from, $to], kèm loại, ê-kíp, dự án, khách hàng.
+     * Lịch có phần nằm trong [$from, $to], kèm loại, ê-kíp, khách hàng.
      *
-     * @param  array{type?: mixed, user?: mixed, project?: mixed, cancelled?: mixed}  $filters
+     * @param  array{type?: mixed, user?: mixed, cancelled?: mixed}  $filters
      * @return Collection<int, ScheduleEntry>
      */
     public function entries(CarbonInterface $from, CarbonInterface $to, array $filters = []): Collection
     {
         return ScheduleEntry::query()
-            ->with(['type', 'crew', 'project', 'customer'])
+            ->with(['type', 'crew', 'customer'])
             ->between($from, $to)
             ->when(empty($filters['cancelled']), fn (Builder $query) => $query->occupying())
             ->when($filters['type'] ?? null, fn (Builder $query, mixed $type) => $query->where('schedule_type_id', (int) $type))
-            ->when($filters['project'] ?? null, fn (Builder $query, mixed $project) => $query->where('project_id', (int) $project))
             ->when($filters['user'] ?? null, fn (Builder $query, mixed $user) => $query->forUser((int) $user))
             ->orderBy('starts_at')
             ->orderBy('id')
@@ -51,15 +48,14 @@ class CalendarQuery
      * Bảy ngày của tuần chứa $date; mỗi ngày chia sáng / chiều.
      *
      * @param  array<string, mixed>  $filters
-     * @return array{from: CarbonImmutable, to: CarbonImmutable, label: string, conflicts: array<int, list<string>>, days: list<array{date: CarbonImmutable, weekday: string, isToday: bool, isWeekend: bool, morning: list<ScheduleEntry>, afternoon: list<ScheduleEntry>, leave: list<ScheduleEntry>, long: list<ScheduleEntry>, milestones: list<string>}>}
+     * @return array{from: CarbonImmutable, to: CarbonImmutable, label: string, conflicts: array<int, list<string>>, days: list<array{date: CarbonImmutable, weekday: string, isToday: bool, isWeekend: bool, morning: list<ScheduleEntry>, afternoon: list<ScheduleEntry>, leave: list<ScheduleEntry>, long: list<ScheduleEntry>}>}
      */
-    public function week(CarbonInterface $date, array $filters = [], ?User $viewer = null): array
+    public function week(CarbonInterface $date, array $filters = []): array
     {
         $from = CarbonImmutable::parse($date)->startOfWeek(CarbonInterface::MONDAY);
         $to = $from->addDays(6)->endOfDay();
 
         $entries = $this->entries($from, $to, $filters);
-        $milestones = $viewer ? $this->milestones($from, $to, $viewer) : [];
         $days = [];
 
         for ($day = $from; $day->lte($to); $day = $day->addDay()) {
@@ -75,7 +71,6 @@ class CalendarQuery
                 'long' => $onDay->filter(fn (ScheduleEntry $entry): bool => $entry->isBackground())->values()->all(),
                 'morning' => $onDay->filter(fn (ScheduleEntry $entry): bool => $this->inBand($entry, $day, 'morning'))->values()->all(),
                 'afternoon' => $onDay->filter(fn (ScheduleEntry $entry): bool => $this->inBand($entry, $day, 'afternoon'))->values()->all(),
-                'milestones' => $milestones[$day->toDateString()] ?? [],
             ];
         }
 
@@ -245,33 +240,5 @@ class CalendarQuery
         }
 
         return $entry->starts_at->hour < self::AFTERNOON_FROM ? 'morning' : 'afternoon';
-    }
-
-    /**
-     * Mốc của dự án trong khoảng ngày: hạn hoàn thành của các dự án đang mở mà
-     * người xem được phép thấy. [ngày => danh sách chữ].
-     *
-     * @return array<string, list<string>>
-     */
-    public function milestones(CarbonInterface $from, CarbonInterface $to, User $viewer): array
-    {
-        if ($viewer->cannot('projects.view')) {
-            return [];
-        }
-
-        $milestones = [];
-
-        Project::query()
-            ->visibleTo($viewer)
-            ->whereNotIn('status', [ProjectStatus::Completed->value, ProjectStatus::Cancelled->value])
-            ->whereDate('end_date', '>=', $from->toDateString())
-            ->whereDate('end_date', '<=', $to->toDateString())
-            ->orderBy('end_date')
-            ->get(['id', 'name', 'end_date'])
-            ->each(function (Project $project) use (&$milestones): void {
-                $milestones[$project->end_date->toDateString()][] = 'Hạn dự án: '.$project->name;
-            });
-
-        return $milestones;
     }
 }

@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Biên bản nghiệm thu của dự án (mục 29). Trạng thái chỉ do
+ * Biên bản nghiệm thu của hợp đồng (mục 29). Trạng thái chỉ do
  * App\Services\Billing\AcceptanceWorkflow ghi.
  */
 class Acceptance extends Model
@@ -34,7 +34,7 @@ class Acceptance extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'project_id',
+        'contract_id',
         'description',
         'acceptance_date',
         'amount',
@@ -76,11 +76,11 @@ class Acceptance extends Model
     }
 
     /**
-     * @return BelongsTo<Project, $this>
+     * @return BelongsTo<Contract, $this>
      */
-    public function project(): BelongsTo
+    public function contract(): BelongsTo
     {
-        return $this->belongsTo(Project::class)->withTrashed();
+        return $this->belongsTo(Contract::class)->withTrashed();
     }
 
     /**

@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Enums\BudgetCategory;
 use App\Enums\PurchaseOrderStatus;
-use App\Models\Concerns\AffectsProjectCosts;
 use App\Models\Concerns\AffectsTaskCosts;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasDocumentCode;
@@ -16,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Đơn mua hàng gửi nhà cung cấp (mục 25). `subtotal` (trước thuế) tính vào
- * chi phí dự án: cam kết khi đã đặt hàng, thực tế khi đã nhận hàng. Trạng
+ * chi phí công việc: cam kết khi đã đặt hàng, thực tế khi đã nhận hàng. Trạng
  * thái và các cột tổng chỉ do App\Services\Purchasing\PurchaseOrderWorkflow ghi.
  */
 class PurchaseOrder extends Model
@@ -25,7 +24,6 @@ class PurchaseOrder extends Model
 
     public const AUDIT_NAME = 'Đơn mua hàng';
 
-    use AffectsProjectCosts;
     use AffectsTaskCosts;
     use HasDocumentCode;
 
@@ -40,7 +38,6 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'purchase_request_id',
         'supplier_id',
-        'project_id',
         'task_id',
         'category',
         'order_date',
@@ -111,14 +108,6 @@ class PurchaseOrder extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class)->withTrashed();
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
     }
 
     /**

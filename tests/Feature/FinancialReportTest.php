@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\SystemRole;
 use App\Models\CostLine;
-use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\Service;
+use App\Models\Task;
 use App\Models\Timesheet;
 use App\Services\Billing\InvoiceWorkflow;
 use App\Services\Purchasing\PurchaseOrderWorkflow;
@@ -16,7 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\Concerns\BuildsExpenses;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsQuotations;
 use Tests\TestCase;
 
@@ -28,7 +28,7 @@ class FinancialReportTest extends TestCase
 {
     use BuildsExpenses;
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsQuotations;
     use RefreshDatabase;
 
@@ -68,33 +68,33 @@ class FinancialReportTest extends TestCase
 
     public function test_cost_counts_paid_expenses_received_orders_and_timesheets(): void
     {
-        $project = $this->makeProject();
+        $job = $this->makeJob();
 
         // Đề nghị chi đã thanh toán: tính. Đã duyệt chưa thanh toán và nháp: không tính.
-        $this->payExpense($this->makeExpense($project, attributes: ['amount' => 4000000, 'expense_date' => '2026-10-03']));
-        $this->approveExpense($this->makeExpense($project, attributes: ['amount' => 9000000, 'expense_date' => '2026-10-04']));
-        $this->makeExpense($project, attributes: ['amount' => 8000000, 'expense_date' => '2026-10-05']);
+        $this->payExpense($this->makeExpense($job, attributes: ['amount' => 4000000, 'expense_date' => '2026-10-03']));
+        $this->approveExpense($this->makeExpense($job, attributes: ['amount' => 9000000, 'expense_date' => '2026-10-04']));
+        $this->makeExpense($job, attributes: ['amount' => 8000000, 'expense_date' => '2026-10-05']);
 
         // Đơn mua hàng đã nhận hàng: 2 × 3.000.000 trước thuế.
         $orders = app(PurchaseOrderWorkflow::class);
-        $order = PurchaseOrder::factory()->create(['project_id' => $project->getKey()]);
+        $order = PurchaseOrder::factory()->create(['task_id' => $job->getKey()]);
         $order->items()->create(['description' => 'Micro', 'quantity' => 2, 'unit_price' => 3000000, 'tax_rate' => 10]);
         $orders->receive($orders->order($orders->recalculate($order), $this->approver(SystemRole::SuperAdmin)), $this->approver(SystemRole::SuperAdmin));
 
         // Đơn mới đặt, chưa nhận hàng: chưa là chi phí thực tế.
-        $pending = PurchaseOrder::factory()->create(['project_id' => $project->getKey()]);
+        $pending = PurchaseOrder::factory()->create(['task_id' => $job->getKey()]);
         $pending->items()->create(['description' => 'Đèn', 'quantity' => 1, 'unit_price' => 50000000, 'tax_rate' => 10]);
         $orders->order($orders->recalculate($pending), $this->approver(SystemRole::SuperAdmin));
 
         // Giờ công: 8 giờ × 100.000.
         Timesheet::factory()->create([
-            'project_id' => $project->getKey(),
+            'task_id' => $job->getKey(),
             'user_id' => $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 100000])->getKey(),
             'work_date' => '2026-10-07',
         ]);
 
         // Chi phí của tháng trước không lẫn vào tháng này.
-        $this->payExpense($this->makeExpense($project, attributes: ['amount' => 2500000, 'expense_date' => '2026-09-20']));
+        $this->payExpense($this->makeExpense($job, attributes: ['amount' => 2500000, 'expense_date' => '2026-09-20']));
 
         $report = app(FinancialReport::class);
 
@@ -102,48 +102,50 @@ class FinancialReportTest extends TestCase
         $this->assertSame('2500000.00', $report->month(today()->subMonthNoOverflow())['cost']);
     }
 
-    public function test_cost_lines_always_add_up_to_the_projects_actual_cost(): void
+    public function test_cost_lines_always_add_up_to_the_tasks_actual_cost(): void
     {
-        $first = $this->makeProject();
-        $second = $this->makeProject();
+        $first = $this->makeJob();
+        $second = $this->makeJob();
 
         $this->payExpense($this->makeExpense($first, attributes: ['amount' => 4000000]));
         $this->payExpense($this->makeExpense($second, attributes: ['amount' => 1500000, 'tax' => 150000]));
         $this->approveExpense($this->makeExpense($second, attributes: ['amount' => 7000000]));
 
         $orders = app(PurchaseOrderWorkflow::class);
-        $order = PurchaseOrder::factory()->create(['project_id' => $first->getKey()]);
+        $order = PurchaseOrder::factory()->create(['task_id' => $first->getKey()]);
         $order->items()->create(['description' => 'Thuê máy quay', 'quantity' => 3, 'unit_price' => 2000000, 'tax_rate' => 8]);
         $orders->receive($orders->order($orders->recalculate($order), $this->approver(SystemRole::SuperAdmin)), $this->approver(SystemRole::SuperAdmin));
 
         Timesheet::factory()->create([
-            'project_id' => $second->getKey(),
+            'task_id' => $second->getKey(),
             'user_id' => $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 150000])->getKey(),
             'hours' => 6,
         ]);
 
-        foreach ([$first, $second] as $project) {
+        foreach ([$first, $second] as $job) {
             $this->assertSame(
-                $project->refresh()->actual_cost,
-                number_format((float) CostLine::query()->where('project_id', $project->getKey())->sum('amount'), 2, '.', ''),
-                "Tổng dòng chi phí của {$project->code} phải bằng chi phí thực tế của dự án.",
+                $job->refresh()->actual_cost,
+                number_format((float) CostLine::query()->where('task_id', $job->getKey())->sum('amount'), 2, '.', ''),
+                "Tổng dòng chi phí của {$job->name} phải bằng chi phí thực tế của công việc.",
             );
         }
 
         $this->assertSame('10000000.00', $first->actual_cost);
         $this->assertSame('2400000.00', $second->actual_cost);
-        $this->assertGreaterThan(0, Project::query()->sum('actual_cost'));
+        // Và bằng chi phí của hợp đồng mà công việc gắn vào.
+        $this->assertSame('10000000.00', $first->contract->refresh()->actual_cost);
+        $this->assertEquals(12400000, Task::query()->sum('actual_cost'));
     }
 
     public function test_profit_and_margin_per_month_and_series(): void
     {
-        $project = $this->makeProject();
+        $job = $this->makeJob();
 
         $this->issuedInvoice(['invoice_date' => '2026-10-02', 'subtotal' => 40000000]);
-        $this->payExpense($this->makeExpense($project, attributes: ['amount' => 10000000, 'expense_date' => '2026-10-03']));
+        $this->payExpense($this->makeExpense($job, attributes: ['amount' => 10000000, 'expense_date' => '2026-10-03']));
 
         // Tháng 9 chỉ có chi phí → lỗ, biên lợi nhuận 0 vì không có doanh thu.
-        $this->payExpense($this->makeExpense($project, attributes: ['amount' => 3000000, 'expense_date' => '2026-09-10']));
+        $this->payExpense($this->makeExpense($job, attributes: ['amount' => 3000000, 'expense_date' => '2026-09-10']));
 
         $report = app(FinancialReport::class);
 

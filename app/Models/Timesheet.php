@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\AffectsProjectCosts;
 use App\Models\Concerns\AffectsTaskCosts;
 use App\Support\Decimal;
 use Database\Factories\TimesheetFactory;
@@ -14,11 +13,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Ghi nhận giờ công (mục 28). Chi phí nhân sự = hours × hourly_rate, trong đó
  * hourly_rate là đơn giá của nhân viên tại thời điểm ghi nhận. Chi phí này
- * được tính vào nhóm "Nhân sự" của dự án và vào chi phí của công việc (nếu có).
+ * được tính vào chi phí nhóm "Nhân sự" của công việc (nếu có gắn công việc).
  */
 class Timesheet extends Model
 {
-    use AffectsProjectCosts;
     use AffectsTaskCosts;
 
     /** @use HasFactory<TimesheetFactory> */
@@ -29,7 +27,6 @@ class Timesheet extends Model
      */
     protected $fillable = [
         'user_id',
-        'project_id',
         'task_id',
         'work_date',
         'hours',
@@ -100,13 +97,5 @@ class Timesheet extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
     }
 }

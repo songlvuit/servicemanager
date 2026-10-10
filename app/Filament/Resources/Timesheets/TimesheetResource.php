@@ -25,7 +25,7 @@ class TimesheetResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static ?string $navigationLabel = 'Chấm công';
 
@@ -58,7 +58,7 @@ class TimesheetResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['user', 'project', 'task'])
+            ->with(['user', 'task'])
             ->visibleTo(auth()->user());
     }
 }

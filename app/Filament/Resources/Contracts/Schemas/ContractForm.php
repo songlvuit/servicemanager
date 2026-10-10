@@ -91,7 +91,7 @@ class ContractForm
                             ->default(fn (): ?string => Decimal::trimZeros(static::sourceQuotation()?->subtotal))
                             ->required()
                             ->live(onBlur: true)
-                            ->helperText('Doanh thu của hợp đồng, dùng để tính lợi nhuận dự án.'),
+                            ->helperText('Doanh thu của hợp đồng, dùng để tính lợi nhuận của hợp đồng.'),
                         Fields::money('tax_amount')
                             ->label('Thuế GTGT')
                             ->default(fn (): string => Decimal::trimZeros(static::sourceQuotation()?->tax) ?? '0')

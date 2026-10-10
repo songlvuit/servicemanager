@@ -2,31 +2,56 @@
 
 namespace App\Filament\Resources\Tasks\RelationManagers;
 
-use App\Enums\TaskStatus;
-use App\Filament\Resources\Projects\RelationManagers\TimesheetsRelationManager as ProjectTimesheets;
 use App\Filament\Resources\Timesheets\Schemas\TimesheetForm;
+use App\Filament\Resources\Timesheets\Tables\TimesheetsTable;
+use App\Filament\Support\Access;
+use BackedEnum;
 use Filament\Actions\CreateAction;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * Tab "Chấm công" của công việc: giờ công ghi cho công việc này (dự án của
- * dòng giờ công tự theo dự án của công việc).
+ * Tab "Chấm công" của công việc: giờ công ghi cho công việc này (mục 28).
  */
-class TimesheetsRelationManager extends ProjectTimesheets
+class TimesheetsRelationManager extends RelationManager
 {
+    protected static string $relationship = 'timesheets';
+
+    protected static ?string $title = 'Chấm công';
+
+    protected static ?string $modelLabel = 'giờ công';
+
+    protected static ?string $pluralModelLabel = 'giờ công';
+
+    protected static string|BackedEnum|null $icon = Heroicon::OutlinedClock;
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        return Access::can('timesheets.view');
+    }
+
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
+
     public function form(Schema $schema): Schema
     {
-        return $schema->components(TimesheetForm::components(withProject: false, withTask: false));
+        return $schema->components(TimesheetForm::components(withTask: false));
     }
 
     public function table(Table $table): Table
     {
-        return parent::table($table)
+        return TimesheetsTable::configure($table, withTask: false)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['user'])->visibleTo(auth()->user()))
             ->headerActions([
                 CreateAction::make()
                     ->label('Ghi giờ công')
-                    ->visible(fn (): bool => $this->getOwnerRecord()->status !== TaskStatus::Cancelled),
+                    ->visible(fn (): bool => ! $this->getOwnerRecord()->isCancelled()),
             ]);
     }
 }

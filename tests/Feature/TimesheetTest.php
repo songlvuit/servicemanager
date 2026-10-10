@@ -10,12 +10,12 @@ use App\Models\Timesheet;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 class TimesheetTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     private User $employee;
@@ -34,17 +34,18 @@ class TimesheetTest extends TestCase
 
     public function test_labor_cost_is_hours_times_the_rate_at_the_time_of_logging(): void
     {
-        $project = $this->makeProject();
+        $job = $this->makeJob();
 
         $entry = Timesheet::factory()->create([
-            'project_id' => $project->getKey(),
+            'task_id' => $job->getKey(),
             'user_id' => $this->employee->getKey(),
             'hours' => 7.5,
         ]);
 
         $this->assertSame('100000.00', $entry->hourly_rate);
         $this->assertSame('750000.00', $entry->cost);
-        $this->assertSame('750000.00', $project->refresh()->labor_cost);
+        $this->assertSame('750000.00', $job->refresh()->actual_cost);
+        $this->assertSame('750000.00', $job->contract->refresh()->actual_cost);
 
         // Tăng đơn giá về sau không làm đổi chi phí đã ghi nhận.
         $this->employee->update(['hourly_rate' => 200000]);
@@ -56,21 +57,21 @@ class TimesheetTest extends TestCase
         $entry->update(['hours' => 8]);
 
         $this->assertSame('800000.00', $entry->refresh()->cost);
-        $this->assertSame('800000.00', $project->refresh()->labor_cost);
+        $this->assertSame('800000.00', $job->refresh()->actual_cost);
 
         $entry->delete();
 
-        $this->assertSame('0.00', $project->refresh()->labor_cost);
+        $this->assertSame('0.00', $job->refresh()->actual_cost);
+        $this->assertSame('0.00', $job->contract->refresh()->actual_cost);
     }
 
     public function test_task_actual_hours_follow_its_timesheets(): void
     {
-        $project = $this->makeProject();
-        $task = Task::factory()->create(['project_id' => $project->getKey()]);
-        $otherTask = Task::factory()->create(['project_id' => $project->getKey()]);
+        $task = Task::factory()->create();
+        $otherTask = Task::factory()->create();
 
-        $first = Timesheet::factory()->create(['project_id' => $project->getKey(), 'task_id' => $task->getKey(), 'hours' => 3]);
-        Timesheet::factory()->create(['project_id' => $project->getKey(), 'task_id' => $task->getKey(), 'hours' => 4.5]);
+        $first = Timesheet::factory()->create(['task_id' => $task->getKey(), 'hours' => 3]);
+        Timesheet::factory()->create(['task_id' => $task->getKey(), 'hours' => 4.5]);
 
         $this->assertSame('7.50', $task->refresh()->actual_hours);
 
@@ -83,16 +84,15 @@ class TimesheetTest extends TestCase
 
     public function test_employee_logs_and_sees_only_own_time(): void
     {
-        $project = $this->makeProject();
-        $project->memberships()->create(['user_id' => $this->employee->getKey()]);
-        $others = Timesheet::factory()->create(['project_id' => $project->getKey(), 'user_id' => $this->pm->getKey()]);
+        $task = Task::factory()->create(['assignee_id' => $this->employee->getKey()]);
+        $others = Timesheet::factory()->create(['task_id' => $task->getKey(), 'user_id' => $this->pm->getKey()]);
 
         $this->actingAs($this->employee);
 
         Livewire::test(ManageTimesheets::class)
             ->assertCanNotSeeTableRecords([$others])
             ->callAction('create', data: [
-                'project_id' => $project->getKey(),
+                'task_id' => $task->getKey(),
                 'work_date' => today()->toDateString(),
                 'hours' => 6,
                 'description' => 'Dựng phim',
@@ -109,7 +109,7 @@ class TimesheetTest extends TestCase
         // Chi phí nhân sự là thông tin nội bộ: nhân viên không thấy cột này.
         $this->get(TimesheetResource::getUrl('index'))->assertOk()->assertDontSee('Chi phí nhân sự');
 
-        // Quản lý dự án thấy giờ công của mọi người và cả chi phí.
+        // Quản lý công việc thấy giờ công của mọi người và cả chi phí.
         $this->actingAs($this->pm);
 
         $this->assertSame(2, Timesheet::query()->visibleTo($this->pm)->count());
@@ -118,14 +118,12 @@ class TimesheetTest extends TestCase
 
     public function test_hours_must_be_within_a_day(): void
     {
-        $project = $this->makeProject();
-
         $this->actingAs($this->pm);
 
         Livewire::test(ManageTimesheets::class)
             ->callAction('create', data: [
                 'user_id' => $this->employee->getKey(),
-                'project_id' => $project->getKey(),
+                'task_id' => Task::factory()->create()->getKey(),
                 'work_date' => today()->addDay()->toDateString(),
                 'hours' => 25,
             ])

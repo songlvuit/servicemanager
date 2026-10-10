@@ -3,16 +3,14 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\ExpenseStatus;
+use App\Enums\MarginBand;
 use App\Filament\Resources\Expenses\ExpenseResource;
 use App\Filament\Resources\Invoices\InvoiceResource;
-use App\Filament\Resources\Projects\ProjectResource;
-use App\Filament\Resources\Projects\Schemas\ProjectInfolist;
 use App\Filament\Resources\Receivables\ReceivableResource;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\Access;
 use App\Models\Expense;
 use App\Models\Invoice;
-use App\Models\Project;
 use App\Models\Task;
 use App\Services\Billing\ReceivableAging;
 use App\Services\Reports\FinancialReport;
@@ -25,7 +23,7 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 /**
  * Hàng thẻ KPI đầu dashboard (mục 35). Mỗi thẻ chỉ hiện với người có quyền
  * xem số liệu đó; người không xem được số liệu tài chính (nhân viên, quản lý
- * dự án…) thấy các thẻ về công việc của chính mình.
+ * công việc…) thấy các thẻ về công việc của chính mình.
  */
 class KpiOverview extends StatsOverviewWidget
 {
@@ -85,7 +83,7 @@ class KpiOverview extends StatsOverviewWidget
                     ->description(Decimal::isPositive($current['revenue'])
                         ? 'Tháng trước: '.(Decimal::isPositive($previous['revenue']) ? Money::percent($previous['margin']) : '—')
                         : 'Tháng này chưa có doanh thu')
-                    ->color(Decimal::isPositive($current['revenue']) ? ProjectInfolist::marginColor($current['margin']) : 'gray');
+                    ->color(Decimal::isPositive($current['revenue']) ? MarginBand::for($current['margin'])->getColor() : 'gray');
             }
         }
 
@@ -103,17 +101,20 @@ class KpiOverview extends StatsOverviewWidget
                 ->url(ReceivableResource::getUrl('index'));
         }
 
-        if (Access::can('projects.view')) {
-            $running = Project::query()->visibleTo($user)->running()->count();
-            $overBudget = Access::canSeeCosts()
-                ? Project::query()->visibleTo($user)->running()->overBudget()->count()
-                : 0;
+        if (Access::can('tasks.view_all')) {
+            $open = Task::query()->open()->count();
+            $overBudget = Access::canSeeCosts() ? Task::query()->overBudget()->count() : 0;
+            $overdue = Task::query()->overdue()->count();
 
-            $stats[] = Stat::make($user->can('projects.view_all') ? 'Dự án đang chạy' : 'Dự án của tôi đang chạy', (string) $running)
-                ->icon(Heroicon::OutlinedBriefcase)
-                ->description($overBudget > 0 ? "{$overBudget} dự án vượt ngân sách" : 'Đang ở trạng thái "Đang thực hiện"')
-                ->color($overBudget > 0 ? 'danger' : 'gray')
-                ->url(ProjectResource::getUrl('index', ['tab' => 'active']));
+            $stats[] = Stat::make('Công việc đang mở', (string) $open)
+                ->icon(Heroicon::OutlinedRectangleStack)
+                ->description(match (true) {
+                    $overBudget > 0 => "{$overBudget} công việc vượt ngân sách",
+                    $overdue > 0 => "{$overdue} công việc quá hạn",
+                    default => 'Không có việc quá hạn',
+                })
+                ->color($overBudget > 0 || $overdue > 0 ? 'danger' : 'gray')
+                ->url(TaskResource::getUrl('index', ['tab' => $overBudget > 0 ? 'over_budget' : 'open']));
         }
 
         // Người không xem số liệu tài chính: thẻ về việc của chính mình.

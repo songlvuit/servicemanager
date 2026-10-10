@@ -15,7 +15,8 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Trang chi tiết hợp đồng: thông tin, các bước của quy trình, dự án và tài liệu.
+ * Trang chi tiết hợp đồng: thông tin, chi phí và lợi nhuận, các bước của quy
+ * trình, công việc thực hiện hợp đồng, hóa đơn và tài liệu.
  */
 class ViewContract extends ViewRecord
 {
@@ -53,7 +54,6 @@ class ViewContract extends ViewRecord
                 ->visible(fn (Contract $record): bool => ContractResource::canEdit($record)),
             ContractActions::sendForSignature(),
             ContractActions::activate(),
-            ContractActions::createProject(),
             ContractActions::complete(),
             ActionGroup::make([
                 ContractActions::returnToDraft(),

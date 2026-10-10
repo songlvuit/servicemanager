@@ -6,7 +6,7 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Nhóm ngân sách / chi phí của dự án (mục 18).
+ * Nhóm ngân sách / chi phí của công việc (mục 18).
  */
 enum BudgetCategory: string implements HasColor, HasLabel
 {

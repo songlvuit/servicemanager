@@ -32,7 +32,11 @@ class RecentActivity extends Widget
         $seesAll = Access::can('audit_logs.view');
 
         $logs = AuditLog::query()
-            ->when(! $seesAll, fn ($query) => $query->where('user_id', auth()->id()))
+            // Không xem được toàn bộ nhật ký: chỉ thao tác của chính mình, và chỉ trên
+            // những loại bản ghi mình còn được xem (báo giá, hợp đồng… cần quyền riêng).
+            ->when(! $seesAll, fn ($query) => $query
+                ->where('user_id', auth()->id())
+                ->withoutSubjectsHiddenFrom(auth()->user()))
             // Đăng nhập không phải là hoạt động nghiệp vụ.
             ->where('action', '!=', 'login')
             ->latest('id')

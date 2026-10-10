@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Quy trình đơn mua hàng (mục 25): Nháp → Đã đặt hàng → Đã nhận hàng → Hoàn tất.
  *
- * Chi phí dự án: đã đặt hàng = chi phí cam kết, đã nhận hàng = chi phí thực tế.
+ * Chi phí công việc: đã đặt hàng = chi phí cam kết, đã nhận hàng = chi phí thực tế.
  * Yêu cầu mua hàng gắn với đơn được chuyển trạng thái theo đơn.
  */
 class PurchaseOrderWorkflow extends StatusWorkflow
@@ -52,8 +52,8 @@ class PurchaseOrderWorkflow extends StatusWorkflow
                 throw new WorkflowException('Tổng giá trị đơn mua hàng phải lớn hơn 0.');
             }
 
-            if ($order->project?->isClosed()) {
-                throw new WorkflowException('Dự án đã hoàn thành hoặc đã huỷ nên không đặt thêm hàng được.');
+            if ($order->task?->isCancelled()) {
+                throw new WorkflowException('Công việc đã huỷ nên không đặt thêm hàng được.');
             }
 
             $request = $order->purchaseRequest;
@@ -71,7 +71,7 @@ class PurchaseOrderWorkflow extends StatusWorkflow
     }
 
     /**
-     * Đã đặt hàng → Đã nhận hàng: ghi nhận chi phí thực tế của dự án.
+     * Đã đặt hàng → Đã nhận hàng: ghi nhận chi phí thực tế của công việc.
      */
     public function receive(PurchaseOrder $order, User $by): PurchaseOrder
     {

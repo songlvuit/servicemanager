@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Tab "Tài liệu" dùng chung cho mọi chứng từ có đính kèm file (mục 47):
- * khách hàng, báo giá, hợp đồng, dự án, chi phí, hóa đơn, nghiệm thu.
+ * khách hàng, báo giá, hợp đồng, chi phí, hóa đơn, nghiệm thu.
  *
  * Xem / tải: ai xem được chứng từ. Tải lên / xoá: policy `manageAttachments`
  * của chứng từ. Định dạng và dung lượng cho phép lấy từ config/uploads.php.

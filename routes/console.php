@@ -18,7 +18,7 @@ Schedule::command('quotations:expire')->dailyAt('00:10');
 // Hóa đơn còn phải thu đã quá ngày đến hạn → Quá hạn.
 Schedule::command('invoices:mark-overdue')->dailyAt('00:15');
 
-// Nhắc hợp đồng sắp hết hạn, hóa đơn sắp tới hạn / quá hạn, dự án sắp tới hạn
+// Nhắc hợp đồng sắp hết hạn, hóa đơn sắp tới hạn / quá hạn
 // (chạy sau khi hóa đơn đã được chuyển sang Quá hạn).
 Schedule::command('reminders:send')->dailyAt('07:30');
 

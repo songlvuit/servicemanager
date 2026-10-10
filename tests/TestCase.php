@@ -7,6 +7,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use RuntimeException;
+use Spatie\Permission\Models\Role;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -46,6 +47,22 @@ abstract class TestCase extends BaseTestCase
     {
         $user = User::factory()->create($attributes);
         $user->assignRole($role->value);
+
+        return $user;
+    }
+
+    /**
+     * Người dùng giữ một vai trò tự tạo chỉ có đúng các quyền được nêu.
+     *
+     * @param  list<string>  $permissions
+     */
+    protected function createUserWithPermissions(array $permissions, array $attributes = []): User
+    {
+        $role = Role::create(['name' => 'Vai trò thử '.(Role::query()->count() + 1), 'guard_name' => 'web']);
+        $role->givePermissionTo($permissions);
+
+        $user = User::factory()->create($attributes);
+        $user->assignRole($role);
 
         return $user;
     }

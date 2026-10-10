@@ -37,7 +37,7 @@ class PurchaseRequestActions
             ->icon(Heroicon::OutlinedCheckCircle)
             ->color('success')
             ->modalHeading(fn (PurchaseRequest $record): string => "Duyệt yêu cầu {$record->code}?")
-            ->modalDescription(fn (PurchaseRequest $record): string => 'Bạn có chắc chắn muốn duyệt yêu cầu mua hàng '.Money::format($record->amount).'? Giá trị này sẽ được tính vào chi phí cam kết của dự án.')
+            ->modalDescription(fn (PurchaseRequest $record): string => 'Bạn có chắc chắn muốn duyệt yêu cầu mua hàng '.Money::format($record->amount).'? Giá trị này sẽ được tính vào chi phí cam kết của công việc.')
             ->schema([
                 Textarea::make('comment')
                     ->label('Ghi chú (không bắt buộc)')

@@ -57,7 +57,6 @@ class ScheduleManager
         // Người chỉ được sửa lịch nghỉ của chính mình thì không đổi được loại lịch và người nghỉ.
         if (! $isNew && $by->cannot('schedules.update')) {
             $attributes['schedule_type_id'] = $entry->schedule_type_id;
-            $attributes['project_id'] = null;
             $attributes['customer_id'] = null;
             $crewIds = [$by->getKey()];
         }
@@ -251,7 +250,6 @@ class ScheduleManager
         }
 
         if (ScheduleType::query()->whereKey($entry->schedule_type_id)->value('is_leave')) {
-            $entry->project_id = null;
             $entry->customer_id = null;
         }
     }

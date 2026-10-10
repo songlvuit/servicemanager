@@ -2,14 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ProjectStatus;
 use App\Enums\ScheduleStatus;
 use App\Enums\SystemRole;
 use App\Enums\TaskStatus;
 use App\Filament\Pages\WorkCalendar;
-use App\Filament\Resources\Projects\Pages\ViewProject;
-use App\Filament\Resources\Projects\RelationManagers\ScheduleRelationManager;
 use App\Filament\Resources\Tasks\Pages\ManageTasks;
+use App\Filament\Resources\Tasks\Pages\ViewTask;
+use App\Filament\Resources\Tasks\RelationManagers\ScheduleRelationManager;
 use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\ScheduleEntry;
@@ -26,7 +25,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsSchedules;
 use Tests\TestCase;
 
@@ -36,7 +35,7 @@ use Tests\TestCase;
  */
 class TaskScheduleTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsSchedules;
     use RefreshDatabase;
 
@@ -88,7 +87,6 @@ class TaskScheduleTest extends TestCase
         $this->assertSame('2026-10-08 13:30:00', $entry->starts_at->toDateTimeString());
         $this->assertSame('2026-10-08 17:00:00', $entry->ends_at->toDateTimeString());
         $this->assertFalse($entry->is_all_day);
-        $this->assertNull($entry->project_id);
         $this->assertSame($customer->getKey(), $entry->customer_id);
         $this->assertSame('Vĩnh Long', $entry->location);
         $this->assertSame('2 cam fix, 1 gimbal', $entry->equipment);
@@ -124,13 +122,13 @@ class TaskScheduleTest extends TestCase
 
     public function test_the_schedule_follows_every_change_of_the_task(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
+        $contract = $this->makeActiveContract();
         $task = $this->makeTask(['name' => 'Livestream', 'start_date' => '2026-10-08', 'is_all_day' => false, 'start_time' => '08:00', 'end_time' => '12:00']);
         $entryId = $task->schedule->getKey();
 
         $task->update([
             'name' => 'Livestream hội thảo',
-            'project_id' => $project->getKey(),
+            'contract_id' => $contract->getKey(),
             'assignee_id' => $this->sang->getKey(),
             'crew_ids' => [],
             'start_date' => '2026-10-09',
@@ -146,8 +144,8 @@ class TaskScheduleTest extends TestCase
         $this->assertSame($entryId, $entry->getKey());
         $this->assertSame('Livestream hội thảo', $entry->title);
         $this->assertSame('2026-10-09 14:00:00', $entry->starts_at->toDateTimeString());
-        $this->assertSame($project->getKey(), $entry->project_id);
-        $this->assertSame($project->customer_id, $entry->customer_id);
+        // Gắn hợp đồng thì khách hàng của công việc (và của lịch) là khách hàng của hợp đồng.
+        $this->assertSame($contract->customer_id, $entry->customer_id);
         $this->assertSame('Studio A', $entry->location);
         $this->assertSame(ScheduleStatus::Tentative, $entry->status);
         $this->assertSame([$this->sang->getKey()], $entry->crew->pluck('id')->all());
@@ -343,18 +341,18 @@ class TaskScheduleTest extends TestCase
         $this->assertSame('2026-10-10', $entry->starts_at->toDateString());
     }
 
-    public function test_project_tasks_show_on_the_project_schedule_tab_and_the_calendar(): void
+    public function test_tasks_show_on_their_schedule_tab_and_the_calendar(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active, 'project_manager_id' => $this->pm->getKey()]);
-        $task = $this->makeTask(['project_id' => $project->getKey(), 'name' => 'Quay bài giảng 1–3', 'start_date' => '2026-10-08']);
+        $task = $this->makeTask(['name' => 'Quay bài giảng 1–3', 'start_date' => '2026-10-08']);
+        $other = $this->makeTask(['name' => 'Việc khác', 'start_date' => '2026-10-08']);
 
         $this->actingAs($this->pm);
 
-        Livewire::test(ScheduleRelationManager::class, ['ownerRecord' => $project, 'pageClass' => ViewProject::class])
+        Livewire::test(ScheduleRelationManager::class, ['ownerRecord' => $task, 'pageClass' => ViewTask::class])
             ->assertCanSeeTableRecords([$task->schedule])
-            ->assertTableActionDoesNotExist('schedule');
+            ->assertCanNotSeeTableRecords([$other->schedule]);
 
-        $this->get(WorkCalendar::getUrl(['date' => '2026-10-08', 'project' => $project->getKey()]))
+        $this->get(WorkCalendar::getUrl(['date' => '2026-10-08']))
             ->assertOk()
             ->assertSee('Quay bài giảng 1–3');
     }
@@ -392,7 +390,7 @@ class TaskScheduleTest extends TestCase
         // Dữ liệu của bản trước: lịch có công việc do hệ thống tạo, nhưng chưa đánh dấu là lịch của công việc,
         // và công việc chưa có thông tin lịch.
         $legacyTask = TaskSchedule::withoutSync(fn (): Task => Task::factory()->create([
-            'project_id' => null, 'name' => 'Livestream cũ', 'assignee_id' => $this->quay->getKey(), 'start_date' => '2026-10-09', 'due_date' => '2026-10-09',
+            'name' => 'Livestream cũ', 'assignee_id' => $this->quay->getKey(), 'start_date' => '2026-10-09', 'due_date' => '2026-10-09',
             'status' => TaskStatus::Done,
         ]));
         $legacyTask->forceFill(['from_schedule' => true])->saveQuietly();
@@ -401,9 +399,9 @@ class TaskScheduleTest extends TestCase
 
         // Công việc tạo tay từ trước, có ngày bắt đầu nhưng chưa có lịch.
         $manual = TaskSchedule::withoutSync(fn (): Task => Task::factory()->create([
-            'project_id' => null, 'name' => 'Bảo dưỡng máy quay', 'assignee_id' => $this->sang->getKey(), 'start_date' => '2026-10-12',
+            'name' => 'Bảo dưỡng máy quay', 'assignee_id' => $this->sang->getKey(), 'start_date' => '2026-10-12',
         ]));
-        $undated = TaskSchedule::withoutSync(fn (): Task => Task::factory()->create(['project_id' => null]));
+        $undated = TaskSchedule::withoutSync(fn (): Task => Task::factory()->create());
 
         $this->assertSame(['linked' => 1, 'created' => 1], app(TaskSchedule::class)->backfill());
         // Chạy lại không làm gì thêm.
@@ -439,7 +437,6 @@ class TaskScheduleTest extends TestCase
     private function makeTask(array $attributes = []): Task
     {
         return Task::factory()->create([
-            'project_id' => null,
             'assignee_id' => $this->quay->getKey(),
             ...$attributes,
         ])->refresh();

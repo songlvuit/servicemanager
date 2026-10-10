@@ -106,7 +106,7 @@ class CustomerTest extends TestCase
 
         $this->get(CustomerResource::getUrl('index'))->assertForbidden();
 
-        // Quản lý dự án chỉ được xem.
+        // Quản lý công việc chỉ được xem.
         $this->actingAs($this->createUserWithRole(SystemRole::ProjectManager));
 
         $this->get(CustomerResource::getUrl('index'))->assertOk();

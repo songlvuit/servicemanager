@@ -4,16 +4,14 @@ namespace Database\Seeders;
 
 use App\Enums\BudgetCategory;
 use App\Enums\PaymentMethod;
-use App\Enums\ProjectStatus;
 use App\Models\Expense;
-use App\Models\Project;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\Supplier;
+use App\Models\Task;
 use App\Models\Timesheet;
 use App\Models\User;
 use App\Services\Expenses\ExpenseWorkflow;
-use App\Services\Projects\ProjectWorkflow;
 use App\Services\Purchasing\PurchaseOrderWorkflow;
 use App\Services\Purchasing\PurchaseRequestWorkflow;
 use Illuminate\Database\Seeder;
@@ -22,8 +20,9 @@ use Illuminate\Support\Collection;
 /**
  * Dữ liệu mẫu Phase 4: 5 nhà cung cấp, 20 đề nghị chi ở đủ các trạng thái,
  * yêu cầu mua hàng, đơn mua hàng và giờ công. Mọi chứng từ đi qua đúng quy
- * trình (workflow + quy trình duyệt) nên chi phí dự án luôn nhất quán: sau
- * khi chạy có dự án "Cảnh báo" và dự án "Vượt ngân sách" để xem thử.
+ * trình (workflow + quy trình duyệt) nên chi phí công việc luôn nhất quán: sau
+ * khi chạy có công việc "Cảnh báo" và công việc "Vượt ngân sách" để xem thử.
+ * Chứng từ gắn vào 8 công việc lớn của DemoContractsSeeder.
  *
  * Chỉ chạy một lần: bỏ qua nếu đã có nhà cung cấp, và không chạy trên production.
  */
@@ -32,8 +31,8 @@ class DemoOperationsSeeder extends Seeder
     /** @var Collection<string, User> */
     private Collection $users;
 
-    /** @var Collection<int, Project> */
-    private Collection $projects;
+    /** @var Collection<int, Task> Các công việc lớn (có hợp đồng), theo thứ tự tạo. */
+    private Collection $jobs;
 
     /** @var list<Supplier> */
     private array $suppliers = [];
@@ -42,7 +41,6 @@ class DemoOperationsSeeder extends Seeder
         ExpenseWorkflow $expenses,
         PurchaseRequestWorkflow $purchaseRequests,
         PurchaseOrderWorkflow $purchaseOrders,
-        ProjectWorkflow $projectWorkflow,
     ): void {
         if (app()->isProduction()) {
             $this->command?->warn('Bỏ qua DemoOperationsSeeder: không tạo dữ liệu mẫu trên production.');
@@ -61,10 +59,10 @@ class DemoOperationsSeeder extends Seeder
             ->get()
             ->keyBy(fn (User $user): string => strstr($user->email, '@', true));
 
-        $this->projects = Project::query()->orderBy('id')->get()->values();
+        $this->jobs = Task::query()->whereNull('parent_id')->whereNotNull('contract_id')->orderBy('id')->get()->values();
 
-        if ($this->users->count() < 5 || $this->projects->count() < 8) {
-            $this->command?->warn('Bỏ qua DemoOperationsSeeder: chưa có tài khoản mẫu hoặc dự án mẫu (chạy các seeder trước đó).');
+        if ($this->users->count() < 5 || $this->jobs->count() < 8) {
+            $this->command?->warn('Bỏ qua DemoOperationsSeeder: chưa có tài khoản mẫu hoặc công việc mẫu (chạy các seeder trước đó).');
 
             return;
         }
@@ -73,16 +71,10 @@ class DemoOperationsSeeder extends Seeder
         $this->users['employee']->update(['hourly_rate' => 120000]);
         $this->users['pm']->update(['hourly_rate' => 200000]);
 
-        // Dự án đã hoàn thành được mở lại tạm thời để ghi nhận chi phí của nó.
-        $closed = $this->projects->filter(fn (Project $project): bool => $project->status === ProjectStatus::Completed);
-        $closed->each(fn (Project $project) => $projectWorkflow->reopen($project, $this->users['pm']));
-
         $this->seedSuppliers();
         $this->seedExpenses($expenses);
         $this->seedPurchasing($purchaseRequests, $purchaseOrders);
         $this->seedTimesheets();
-
-        $closed->each(fn (Project $project) => $projectWorkflow->complete($project->refresh(), $this->users['pm']));
     }
 
     private function seedSuppliers(): void
@@ -113,42 +105,42 @@ class DemoOperationsSeeder extends Seeder
     private function seedExpenses(ExpenseWorkflow $workflow): void
     {
         /*
-         * [dự án, nhóm, nội dung, trước thuế, thuế, số ngày trước, nhà cung cấp|null, trạng thái cuối, người đề nghị]
+         * [công việc, nhóm, nội dung, trước thuế, thuế, số ngày trước, nhà cung cấp|null, trạng thái cuối, người đề nghị]
          * Trạng thái cuối: draft, pm (chờ PM), accounting (chờ kế toán), director (chờ giám đốc),
          * approved, rejected, paid, completed.
          */
         $rows = [
-            // Dự án 1 — TVC: trong ngân sách.
+            // Việc 1 — TVC: trong ngân sách.
             [0, 'equipment', 'Thuê máy quay và đèn 2 ngày', 8000000, 800000, 6, 0, 'paid', 'employee'],
             [0, 'production', 'Thuê studio 1 ngày', 4500000, 450000, 5, 1, 'paid', 'employee'],
             [0, 'production', 'Đạo cụ và phục trang', 2200000, 0, 3, null, 'approved', 'employee'],
             [0, 'travel', 'Di chuyển đoàn quay', 900000, 0, 2, null, 'pm', 'employee'],
             [0, 'personnel', 'Thù lao diễn viên phụ', 3000000, 0, 2, null, 'accounting', 'employee'],
-            // Dự án 2 — Video khoá học đợt 1: chi phí vượt 80% ngân sách (cảnh báo).
+            // Việc 2 — Video khoá học đợt 1: chi phí vượt 80% ngân sách (cảnh báo).
             [1, 'personnel', 'Thù lao giảng viên đợt 1', 45000000, 0, 30, null, 'completed', 'employee'],
             [1, 'equipment', 'Thuê thiết bị thu âm 10 buổi', 18000000, 1800000, 24, 0, 'paid', 'employee'],
             [1, 'production', 'Dựng phim thuê ngoài 10 bài', 24000000, 2400000, 12, 2, 'paid', 'employee'],
             [1, 'travel', 'Vé máy bay cho giảng viên', 6500000, 0, 20, null, 'paid', 'employee'],
             [1, 'production', 'Làm phụ đề 10 bài giảng', 5000000, 500000, 1, 2, 'director', 'employee'],
-            // Dự án 5 — Lookbook (đã hoàn thành).
+            // Việc 5 — Lookbook (đã hoàn thành).
             [4, 'personnel', 'Người mẫu và trang điểm', 12000000, 0, 62, null, 'completed', 'employee'],
             [4, 'equipment', 'Thuê thiết bị chụp ảnh', 5000000, 500000, 60, 0, 'completed', 'employee'],
             [4, 'travel', 'Di chuyển và ăn uống đoàn chụp', 2800000, 0, 58, null, 'completed', 'employee'],
-            // Dự án 6 — Nhận diện thương hiệu: vượt ngân sách.
+            // Việc 6 — Nhận diện thương hiệu: vượt ngân sách.
             [5, 'personnel', 'Thuê designer tự do', 28000000, 0, 40, null, 'paid', 'employee'],
             [5, 'software', 'Bản quyền font chữ và phần mềm', 5500000, 550000, 33, 3, 'paid', 'employee'],
             [5, 'other', 'In mẫu thử bộ nhận diện', 3200000, 320000, 9, 4, 'paid', 'employee'],
             [5, 'marketing', 'Khảo sát khách hàng mục tiêu', 4000000, 0, 7, null, 'rejected', 'employee'],
-            // Các dự án khác.
+            // Các công việc khác.
             [6, 'production', 'Nhạc nền có bản quyền', 1500000, 0, 1, null, 'draft', 'employee'],
             [2, 'equipment', 'Đặt cọc thuê phòng thu', 10000000, 0, 1, 1, 'pm', 'employee'],
-            // Do quản lý dự án đề nghị: bước PM duyệt được bỏ qua.
+            // Do quản lý công việc đề nghị: bước quản lý duyệt được bỏ qua.
             [2, 'personnel', 'Tạm ứng thù lao giảng viên đợt 2', 20000000, 0, 1, null, 'accounting', 'pm'],
         ];
 
-        foreach ($rows as [$projectIndex, $category, $description, $amount, $tax, $daysAgo, $supplierIndex, $final, $requester]) {
+        foreach ($rows as [$jobIndex, $category, $description, $amount, $tax, $daysAgo, $supplierIndex, $final, $requester]) {
             $expense = new Expense([
-                'project_id' => $this->projects[$projectIndex]->getKey(),
+                'task_id' => $this->jobs[$jobIndex]->getKey(),
                 'category' => BudgetCategory::from($category),
                 'description' => $description,
                 'amount' => $amount,
@@ -191,7 +183,7 @@ class DemoOperationsSeeder extends Seeder
             }
 
             if ($final === 'rejected') {
-                $workflow->reject($expense, $this->users[$approver], 'Khoản chi này chưa có trong kế hoạch của dự án.');
+                $workflow->reject($expense, $this->users[$approver], 'Khoản chi này chưa có trong kế hoạch của công việc.');
 
                 return;
             }
@@ -222,19 +214,19 @@ class DemoOperationsSeeder extends Seeder
         $procurement = $this->users['procurement'];
 
         /*
-         * [dự án, nhóm, nội dung, giá trị, nhà cung cấp, người yêu cầu, trạng thái yêu cầu, trạng thái đơn]
+         * [công việc, nhóm, nội dung, giá trị, nhà cung cấp, người yêu cầu, trạng thái yêu cầu, trạng thái đơn]
          * Đơn: null (chưa lập), ordered (đã đặt — chi phí cam kết), received (đã nhận — chi phí thực tế).
          */
         $rows = [
             [1, 'equipment', 'Mua 2 micro không dây cho quay bài giảng', 12000000, 0, 'procurement', 'approved', 'ordered'],
-            // Do quản lý dự án yêu cầu: bước PM duyệt được bỏ qua, kế toán kiểm tra ngân sách.
+            // Do quản lý công việc yêu cầu: bước quản lý duyệt được bỏ qua, kế toán kiểm tra ngân sách.
             [0, 'production', 'In backdrop và standee cho buổi quay', 3500000, 4, 'pm', 'approved', 'received'],
             [2, 'equipment', 'Thuê màn hình LED cho phòng thu', 25000000, null, 'procurement', 'submitted', null],
         ];
 
-        foreach ($rows as [$projectIndex, $category, $description, $amount, $supplierIndex, $requester, $requestStatus, $orderStatus]) {
+        foreach ($rows as [$jobIndex, $category, $description, $amount, $supplierIndex, $requester, $requestStatus, $orderStatus]) {
             $request = new PurchaseRequest([
-                'project_id' => $this->projects[$projectIndex]->getKey(),
+                'task_id' => $this->jobs[$jobIndex]->getKey(),
                 'supplier_id' => $supplierIndex === null ? null : $this->suppliers[$supplierIndex]->getKey(),
                 'category' => BudgetCategory::from($category),
                 'description' => $description,
@@ -255,7 +247,7 @@ class DemoOperationsSeeder extends Seeder
                 $awaiting = $request->currentApproval()->first()?->current_role;
 
                 if ($awaiting === $this->users[$approver]->getRoleNames()->first()) {
-                    $request = $requests->approve($request, $this->users[$approver], 'Cần cho tiến độ dự án.');
+                    $request = $requests->approve($request, $this->users[$approver], 'Cần cho tiến độ công việc.');
                 }
             }
 
@@ -266,7 +258,7 @@ class DemoOperationsSeeder extends Seeder
             $order = new PurchaseOrder([
                 'purchase_request_id' => $request->getKey(),
                 'supplier_id' => $request->supplier_id,
-                'project_id' => $request->project_id,
+                'task_id' => $request->task_id,
                 'category' => $request->category,
                 'order_date' => today()->subDays(4),
                 'delivery_date' => today()->addDays(6),
@@ -292,7 +284,7 @@ class DemoOperationsSeeder extends Seeder
         // Một đơn nháp lập trực tiếp (không qua yêu cầu mua hàng).
         $draft = new PurchaseOrder([
             'supplier_id' => $this->suppliers[3]->getKey(),
-            'project_id' => $this->projects[5]->getKey(),
+            'task_id' => $this->jobs[5]->getKey(),
             'category' => BudgetCategory::Software,
             'order_date' => today(),
         ]);
@@ -304,7 +296,7 @@ class DemoOperationsSeeder extends Seeder
 
     private function seedTimesheets(): void
     {
-        // [dự án, người, số ngày trước, số giờ, nội dung]
+        // [công việc, người, số ngày trước, số giờ, nội dung]
         $rows = [
             [0, 'employee', 6, 8, 'Quay tại studio — ngày 1'],
             [0, 'employee', 5, 8, 'Quay tại studio — ngày 2'],
@@ -322,14 +314,13 @@ class DemoOperationsSeeder extends Seeder
             [5, 'employee', 22, 8, 'Hoàn thiện 3 phương án logo'],
         ];
 
-        foreach ($rows as [$projectIndex, $user, $daysAgo, $hours, $description]) {
-            $project = $this->projects[$projectIndex];
+        foreach ($rows as [$jobIndex, $user, $daysAgo, $hours, $description]) {
+            $job = $this->jobs[$jobIndex];
 
             Timesheet::create([
                 'user_id' => $this->users[$user]->getKey(),
-                'project_id' => $project->getKey(),
-                // Gắn với một công việc của người đó trong dự án, nếu có.
-                'task_id' => $project->tasks()->where('assignee_id', $this->users[$user]->getKey())->value('id'),
+                // Gắn với một công việc con của người đó, nếu không thì chính công việc lớn.
+                'task_id' => $job->children()->where('assignee_id', $this->users[$user]->getKey())->value('id') ?? $job->getKey(),
                 'work_date' => today()->subDays($daysAgo),
                 'hours' => $hours,
                 'description' => $description,

@@ -2,17 +2,14 @@
 
 namespace App\Services\Notifications;
 
-use App\Enums\ProjectStatus;
 use App\Enums\SystemRole;
 use App\Filament\Resources\Contracts\ContractResource;
 use App\Filament\Resources\Invoices\InvoiceResource;
 use App\Models\Contract;
 use App\Models\Invoice;
-use App\Models\Project;
 use App\Models\ReminderLog;
 use App\Models\ScheduleEntry;
 use App\Models\User;
-use App\Services\Projects\ProjectNotifier;
 use App\Services\Scheduling\ScheduleNotifier;
 use App\Support\Money;
 use Filament\Actions\Action;
@@ -23,10 +20,9 @@ use Illuminate\Support\Collection;
 /**
  * Nhắc việc theo ngày (mục 38), chạy mỗi sáng bằng lệnh `reminders:send`:
  *
- *   - hợp đồng sắp hết hạn        → người lập hợp đồng + Giám đốc
+ *   - hợp đồng sắp hết hạn        → người lập hợp đồng + Giám đốc (ai còn quyền xem hợp đồng)
  *   - hóa đơn sắp tới hạn         → người lập hóa đơn + Kế toán
  *   - hóa đơn quá hạn             → người lập hóa đơn + Kế toán + Giám đốc
- *   - dự án sắp tới hạn hoàn thành → quản lý dự án + Giám đốc
  *   - lịch làm việc của ngày mai    → từng người trong ê-kíp
  *
  * Mỗi sự kiện chỉ được nhắc MỘT lần (bảng reminder_logs). Khi ngày hết hạn /
@@ -36,12 +32,11 @@ use Illuminate\Support\Collection;
 class ReminderService
 {
     public function __construct(
-        private readonly ProjectNotifier $projects,
         private readonly ScheduleNotifier $schedules,
     ) {}
 
     /**
-     * @return array{contracts: int, invoices_due: int, invoices_overdue: int, projects: int, schedules: int}
+     * @return array{contracts: int, invoices_due: int, invoices_overdue: int, schedules: int}
      */
     public function send(): array
     {
@@ -49,7 +44,6 @@ class ReminderService
             'contracts' => $this->contractsExpiring(),
             'invoices_due' => $this->invoicesDueSoon(),
             'invoices_overdue' => $this->invoicesOverdue(),
-            'projects' => $this->projectDeadlines(),
             'schedules' => $this->schedulesTomorrow(),
         ];
     }
@@ -85,7 +79,7 @@ class ReminderService
 
     public function contractsExpiring(): int
     {
-        $days = (int) config('project.contract_expiry_warning_days', 30);
+        $days = (int) config('job.contract_expiry_warning_days', 30);
         $sent = 0;
 
         Contract::query()
@@ -100,7 +94,7 @@ class ReminderService
                 $left = (int) today()->diffInDays($contract->end_date, false);
 
                 $this->notify(
-                    $this->recipients($contract->created_by, SystemRole::Director),
+                    $this->recipients('contracts.view', $contract->created_by, SystemRole::Director),
                     Notification::make()
                         ->title('Hợp đồng sắp hết hạn')
                         ->body("{$contract->code} — {$contract->customer?->name}: hết hạn ngày {$contract->end_date->format('d/m/Y')} (".$this->when($left).').')
@@ -133,7 +127,7 @@ class ReminderService
                 $left = (int) today()->diffInDays($invoice->due_date, false);
 
                 $this->notify(
-                    $this->recipients($invoice->created_by, SystemRole::Accountant),
+                    $this->recipients('invoices.view', $invoice->created_by, SystemRole::Accountant),
                     Notification::make()
                         ->title('Hóa đơn sắp tới hạn thanh toán')
                         ->body("{$invoice->code} — {$invoice->customer?->name}: còn phải thu ".Money::format($invoice->remaining_amount)
@@ -162,7 +156,7 @@ class ReminderService
                 }
 
                 $this->notify(
-                    $this->recipients($invoice->created_by, SystemRole::Accountant, SystemRole::Director),
+                    $this->recipients('invoices.view', $invoice->created_by, SystemRole::Accountant, SystemRole::Director),
                     Notification::make()
                         ->title('Hóa đơn quá hạn thanh toán')
                         ->body("{$invoice->code} — {$invoice->customer?->name}: còn phải thu ".Money::format($invoice->remaining_amount)
@@ -178,34 +172,14 @@ class ReminderService
         return $sent;
     }
 
-    public function projectDeadlines(): int
-    {
-        $days = (int) config('project.deadline_warning_days', 7);
-        $sent = 0;
-
-        Project::query()
-            ->whereNotIn('status', [ProjectStatus::Completed->value, ProjectStatus::Cancelled->value])
-            ->whereDate('end_date', '>=', today())
-            ->whereDate('end_date', '<=', today()->addDays($days))
-            ->each(function (Project $project) use (&$sent): void {
-                if (! ReminderLog::claim("project-deadline:{$project->getKey()}:{$project->end_date->toDateString()}")) {
-                    return;
-                }
-
-                $this->projects->deadlineApproaching($project, (int) today()->diffInDays($project->end_date, false));
-
-                $sent++;
-            });
-
-        return $sent;
-    }
-
     /**
-     * Người lập chứng từ và mọi người đang hoạt động giữ một trong các vai trò.
+     * Người lập chứng từ và mọi người đang hoạt động giữ một trong các vai trò
+     * — nhưng chỉ những ai CÒN quyền xem loại chứng từ đó (người lập có thể đã
+     * đổi vai trò; hợp đồng, hóa đơn không được lộ qua thông báo).
      *
      * @return Collection<int, User>
      */
-    private function recipients(?int $creatorId, SystemRole ...$roles): Collection
+    private function recipients(string $permission, ?int $creatorId, SystemRole ...$roles): Collection
     {
         $roleNames = array_map(fn (SystemRole $role): string => $role->value, $roles);
 
@@ -216,7 +190,9 @@ class ReminderService
                     ->whereKey($creatorId ?? 0)
                     ->orWhereHas('roles', fn (Builder $query) => $query->whereIn('name', $roleNames));
             })
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => $user->can($permission))
+            ->values();
     }
 
     /**

@@ -1,6 +1,8 @@
 # Service Manager — Hệ thống quản lý công ty dịch vụ
 
-Quản lý toàn bộ vòng đời: khách hàng → báo giá → phê duyệt → hợp đồng → dự án → ngân sách → công việc → chi phí → mua hàng → nghiệm thu → hóa đơn → thanh toán → lợi nhuận.
+Quản lý toàn bộ vòng đời: khách hàng → báo giá → phê duyệt → hợp đồng → công việc (ngân sách, lịch) → chi phí → mua hàng → nghiệm thu → hóa đơn → thanh toán → lợi nhuận.
+
+> **Không còn module Dự án.** Phần mềm quản lý các **công việc độc lập**; mỗi công việc gắn được với một hợp đồng và một báo giá. Nội dung hợp đồng, báo giá chỉ **Giám đốc và Kế toán** xem được — xem [Công việc, hợp đồng và báo giá](#nghiệp-vụ-phase-3-hợp-đồng--công-việc).
 
 Hệ thống được xây theo từng phase. **Hiện tại: đã xong Phase 1–6.** Còn lại Phase 7 (rà soát UI, responsive, hiệu năng, bảo mật).
 
@@ -8,7 +10,7 @@ Hệ thống được xây theo từng phase. **Hiện tại: đã xong Phase 1�
 |---|---|---|
 | 1 | Hạ tầng Docker, đăng nhập, người dùng, vai trò & quyền, layout | Xong |
 | 2 | Khách hàng, liên hệ, dịch vụ, cơ hội, báo giá, duyệt báo giá | Xong |
-| 3 | Hợp đồng, dự án, dashboard dự án, công việc (Kanban), ngân sách | Xong |
+| 3 | Hợp đồng, công việc (danh sách, Kanban, ngân sách), công việc ↔ hợp đồng / báo giá | Xong |
 | 4 | Chi phí, nhà cung cấp, mua hàng, chấm công, approval engine, kiểm soát chi phí | Xong |
 | 5 | Nghiệm thu, hóa đơn, thanh toán, công nợ | Xong |
 | 6 | Dashboard, lợi nhuận, báo cáo, xuất dữ liệu, thông báo, audit log, cấu hình | Xong |
@@ -99,7 +101,7 @@ Toàn bộ cấu hình nằm trong `.env` (mẫu: `.env.example`).
 
 > Đặt `DB_PASSWORD` **trước lần chạy đầu tiên**. PostgreSQL chỉ nhận mật khẩu này khi tạo volume; đổi về sau phải đổi cả trong database (xem [Troubleshooting](#14-troubleshooting)).
 
-Các ngưỡng nghiệp vụ (thuế mặc định, ngưỡng cảnh báo ngân sách, biên lợi nhuận, số ngày nhắc hạn…) có giá trị mặc định trong `config/quotation.php`, `config/project.php`, `config/billing.php` (đổi bằng biến `QUOTATION_*`, `PROJECT_*`, `INVOICE_*` trong `.env`) và **sửa được ngay trên giao diện ở Hệ thống → Cấu hình** — giá trị lưu trên giao diện được ưu tiên.
+Các ngưỡng nghiệp vụ (thuế mặc định, ngưỡng cảnh báo ngân sách, biên lợi nhuận, số ngày nhắc hạn…) có giá trị mặc định trong `config/quotation.php`, `config/job.php`, `config/billing.php` (đổi bằng biến `QUOTATION_*`, `JOB_*`, `INVOICE_*` trong `.env`; biến `PROJECT_*` của bản cũ vẫn được đọc) và **sửa được ngay trên giao diện ở Hệ thống → Cấu hình** — giá trị lưu trên giao diện được ưu tiên.
 
 Quy ước hiển thị: tiền `45.000.000 ₫`, ngày `DD/MM/YYYY`, ngày giờ `DD/MM/YYYY HH:mm`.
 
@@ -120,7 +122,7 @@ Với `AUTO_MIGRATE=true`, migration tự chạy mỗi lần container `app` kh�
 | `RolesAndPermissionsSeeder` | Danh mục quyền và 7 vai trò hệ thống theo `config/access.php` | Mọi môi trường. Chạy lại nhiều lần đều an toàn; không ghi đè quyền đã chỉnh trên giao diện. |
 | `DevUserSeeder` | Tài khoản mẫu | Chỉ môi trường phát triển (tự bỏ qua khi `APP_ENV=production`). |
 | `DemoDataSeeder` | 11 dịch vụ, 5 khách hàng, 10 liên hệ, 6 cơ hội, 10 báo giá ở đủ các trạng thái | Chỉ môi trường phát triển. Chỉ chạy khi chưa có khách hàng nào. |
-| `DemoProjectsSeeder` | 5 hợp đồng, 8 dự án kèm ngân sách, thành viên và công việc | Chỉ môi trường phát triển. Chỉ chạy khi chưa có hợp đồng nào. |
+| `DemoContractsSeeder` | 5 hợp đồng, 8 công việc lớn gắn hợp đồng (có ngân sách) và 20 công việc con | Chỉ môi trường phát triển. Chỉ chạy khi chưa có hợp đồng nào. |
 | `DemoOperationsSeeder` | 5 nhà cung cấp, đề nghị chi ở đủ các bước duyệt, yêu cầu mua hàng, đơn mua hàng, giờ công | Chỉ môi trường phát triển. Chỉ chạy khi chưa có đề nghị chi nào. |
 | `DemoBillingSeeder` | 4 biên bản nghiệm thu, 10 hóa đơn (nháp, đã phát hành, thu một phần, đã thu đủ, quá hạn), 10 lần thanh toán | Chỉ môi trường phát triển. Chỉ chạy khi chưa có hóa đơn nào. |
 | `DemoScheduleSeeder` | 4 tài khoản ê-kíp và 20 lịch quanh tuần hiện tại (có lịch nhiều ngày, lịch dự kiến, lịch đã huỷ, một ngày nghỉ, một trường hợp trùng lịch) | Chỉ môi trường phát triển. Chỉ chạy khi chưa có lịch nào. |
@@ -141,10 +143,10 @@ Khi một phase thêm module mới, `RolesAndPermissionsSeeder` tự cấp các 
 | Email | Vai trò |
 |---|---|
 | `admin@example.com` | Super Admin — toàn quyền |
-| `director@example.com` | Director — xem toàn bộ, duyệt, xem tài chính |
-| `sales@example.com` | Sales — khách hàng, cơ hội, báo giá, hợp đồng |
-| `pm@example.com` | Project Manager — dự án, công việc, ngân sách, đề nghị chi |
-| `accounting@example.com` | Accountant — chi phí, hóa đơn, thanh toán, công nợ |
+| `director@example.com` | Director — xem toàn bộ, duyệt, xem tài chính; toàn quyền với báo giá, hợp đồng, công việc |
+| `sales@example.com` | Sales — khách hàng, cơ hội (không xem được báo giá, hợp đồng) |
+| `pm@example.com` | Project Manager ("Quản lý công việc") — công việc, ngân sách, lịch, đề nghị chi (không xem được hợp đồng, báo giá) |
+| `accounting@example.com` | Accountant — lập báo giá, hợp đồng, nghiệm thu; chi phí, hóa đơn, thanh toán, công nợ |
 | `procurement@example.com` | Procurement — nhà cung cấp, mua hàng |
 | `employee@example.com` | Employee — công việc được giao, đề nghị chi |
 | `quay@`, `dung@`, `sang@`, `thanh@example.com` | Employee — ê-kíp mẫu của Lịch làm việc (tạo bởi `DemoScheduleSeeder`) |
@@ -165,7 +167,7 @@ app/
   Models/                   Mỗi bảng một model; Concerns/ chứa các trait dùng chung (Auditable, HasApprovals, HasAttachments…)
   Services/
     Workflow/               Khung đổi trạng thái dùng chung (transaction, khoá dòng, kiểm tra quyền)
-    Quotations/ Contracts/ Projects/ Expenses/ Purchasing/ Billing/
+    Quotations/ Contracts/ Tasks/ Expenses/ Purchasing/ Billing/
                             Quy trình và phép tính của từng nghiệp vụ
     Approvals/              Bộ máy duyệt theo bảng approval_rules
     Reports/                Doanh thu – chi phí – lợi nhuận theo tháng, doanh thu theo dịch vụ
@@ -181,12 +183,12 @@ app/
   Console/Commands/         quotations:expire, invoices:mark-overdue, reminders:send, app:create-admin
   Filament/
     Pages/                  Dashboard, Lịch làm việc, Thông báo, Cấu hình, Reports/ (lợi nhuận, doanh thu, chi phí)
-    Widgets/                Thẻ KPI, biểu đồ, "Dự án cần chú ý", "Cần xử lý", "Hoạt động gần đây"
+    Widgets/                Thẻ KPI, biểu đồ, "Công việc cần chú ý", "Cần xử lý", "Hoạt động gần đây"
     Resources/              Mỗi module một thư mục (form, bảng, trang, tab liên quan)
     RelationManagers/       Tab dùng chung: Tài liệu, Hóa đơn, Hoạt động
     Support/                Cột/bộ lọc dùng chung, nút quy trình, xuất dữ liệu, bảng màu biểu đồ
 config/access.php           Khai báo module, quyền, quyền mặc định của vai trò
-config/quotation.php, project.php, billing.php, uploads.php, company.php
+config/quotation.php, job.php, billing.php, uploads.php, company.php
                             Giá trị mặc định của các quy tắc nghiệp vụ
 database/migrations, seeders, factories
 docker/                     Nginx, PHP, entrypoint
@@ -206,7 +208,7 @@ Lịch chạy tự động (container `scheduler`, giờ Việt Nam — xem `rou
 |---|---|---|
 | 00:10 | `quotations:expire` | Báo giá quá ngày hiệu lực → Hết hạn |
 | 00:15 | `invoices:mark-overdue` | Hóa đơn chưa thu đủ đã quá hạn → Quá hạn |
-| 07:30 và 17:00 | `reminders:send` | Thông báo: hợp đồng sắp hết hạn, hóa đơn sắp tới hạn / quá hạn, dự án sắp tới hạn, lịch làm việc ngày mai (mỗi sự kiện chỉ nhắc một lần) |
+| 07:30 và 17:00 | `reminders:send` | Thông báo: hợp đồng sắp hết hạn, hóa đơn sắp tới hạn / quá hạn, lịch làm việc ngày mai (mỗi sự kiện chỉ nhắc một lần) |
 
 Khi `APP_ENV=local`, scheduler còn chạy `dev:runner` mỗi phút: lệnh này thực hiện các tác vụ phát triển (migrate, seed, test…) được yêu cầu qua file `storage/app/dev-runner/request.json` và ghi kết quả vào `storage/logs/dev-runner/`. Lệnh không được lên lịch ở production.
 
@@ -259,22 +261,46 @@ Nháp ──gửi duyệt──▶ Chờ duyệt ──duyệt──▶ Đã duy
 
 Các ngưỡng (20% biên lợi nhuận, 20% chiết khấu, số ngày hiệu lực, thuế suất mặc định) nằm trong `config/quotation.php`, đổi bằng biến `QUOTATION_*` trong `.env`.
 
-**Giá vốn và lợi nhuận là thông tin nội bộ**: chỉ người có quyền "Chi phí nội bộ & giá vốn" (`internal_costs.view`) mới thấy. Mặc định Sales không có quyền này — khi Sales lập báo giá, hệ thống tự lấy giá vốn mặc định của dịch vụ.
+**Giá vốn và lợi nhuận là thông tin nội bộ**: chỉ người có quyền "Chi phí nội bộ & giá vốn" (`internal_costs.view`) mới thấy. Người lập báo giá mà không có quyền này thì hệ thống tự lấy giá vốn mặc định của dịch vụ.
+
+**Ai làm việc với báo giá, hợp đồng:** mặc định chỉ **Kế toán** (lập, sửa, gửi duyệt) và **Giám đốc** (toàn quyền, duyệt). Kinh doanh quản lý khách hàng và cơ hội, không xem được báo giá, hợp đồng, hóa đơn, công nợ. Muốn cho thêm người xem: cấp quyền *Báo giá — Xem* / *Hợp đồng — Xem* ở **Hệ thống → Vai trò & quyền**.
 
 Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân chính xác (`app/Support/Decimal.php`), không dùng float.
 
-## Nghiệp vụ Phase 3: hợp đồng → dự án → ngân sách → công việc
+## Nghiệp vụ Phase 3: hợp đồng → công việc
 
-- **Hợp đồng**: Nháp → Chờ ký → Đang hiệu lực → Đã hoàn thành (hoặc Đã huỷ). Lập trực tiếp hoặc từ báo giá đã được khách chấp nhận. Chỉ hợp đồng nháp mới sửa / xoá được.
-- **Rule 1**: chỉ tạo được dự án từ hợp đồng **Đang hiệu lực**.
-- **Dự án**: Lập kế hoạch → Đang thực hiện ⇄ Tạm dừng → Hoàn thành (hoặc Đã huỷ). Người không có quyền "Xem tất cả" chỉ thấy dự án mình quản lý, là thành viên hoặc có việc được giao.
-- **Ngân sách** lập theo nhóm (Nhân sự, Thiết bị, Nhà cung cấp, Đi lại, Sản xuất, Phần mềm, Marketing, Khác). Người dùng chỉ nhập số kế hoạch; số đã cam kết / thực tế / còn lại do hệ thống tính.
-- **Công việc**: danh sách và bảng Kanban kéo-thả; tiến độ dự án là trung bình tiến độ các công việc chưa huỷ. Công việc không bắt buộc thuộc dự án — xem "Dự án là tuỳ chọn" ở Phase 4.
-- **Trang dự án** là dashboard của dự án: doanh thu, ngân sách, chi phí cam kết / thực tế, lợi nhuận, biên lợi nhuận, đã thu / còn phải thu, tiến độ, bảng lãi lỗ theo nhóm chi phí.
+- **Hợp đồng**: Nháp → Chờ ký → Đang hiệu lực → Đã hoàn thành (hoặc Đã huỷ). Lập trực tiếp hoặc từ báo giá đã được khách chấp nhận. Chỉ hợp đồng nháp mới sửa / xoá được. Hợp đồng còn công việc đang mở thì chưa hoàn thành / huỷ được.
+- **Công việc** là đơn vị quản lý duy nhất (không có "dự án"): danh sách, **bảng Kanban** kéo-thả (Công việc → Bảng Kanban; lọc "Việc tôi phụ trách"), trang chi tiết với tiền và lịch. Mỗi công việc có **ngân sách** riêng; chi phí đã cam kết / thực tế do hệ thống tính từ chứng từ. Công việc có thể có **công việc con** — chi phí của việc con được tính vào việc cha (ngân sách của việc lớn bao trùm các việc con).
+- Người không có quyền "Xem tất cả" chỉ thấy công việc mình phụ trách hoặc có trong ê-kíp.
+
+### Công việc, hợp đồng và báo giá
+
+- Mỗi công việc gắn được với **một hợp đồng** và **một báo giá**. Gắn hợp đồng thì báo giá và khách hàng tự lấy theo hợp đồng; công việc con luôn theo hợp đồng, báo giá của công việc cha.
+- Gắn ở ba nơi: form công việc (phần *Hợp đồng & báo giá*), nút **Hợp đồng & báo giá** trên trang công việc, hoặc tab **Công việc** của trang hợp đồng (thêm công việc mới, *Gắn công việc có sẵn*, *Gỡ khỏi hợp đồng*).
+- **Chỉ người có quyền xem Hợp đồng / Báo giá mới thấy** — mặc định Giám đốc và Kế toán. Với mọi người khác (quản lý công việc, nhân viên, ê-kíp), cột, ô nhập, bộ lọc và phần *Hợp đồng & báo giá* **không có trong trang** (không chỉ ẩn đi): mã hợp đồng, tên, giá trị không nằm trong dữ liệu gửi xuống trình duyệt, không có trong file xuất, lịch, bảng Kanban, thông báo hay "Hoạt động gần đây". Họ sửa công việc cũng không làm đổi hay mất liên kết.
+- Kế toán không sửa được công việc nhưng gắn / gỡ được hợp đồng cho công việc (đó là thông tin của phía hợp đồng).
+- **Chi phí và lợi nhuận của hợp đồng** (trang hợp đồng, phần *Chi phí & lợi nhuận*, và Báo cáo lợi nhuận): ngân sách, chi phí đã cam kết, chi phí thực tế = tổng của các công việc gắn với hợp đồng; lợi nhuận = giá trị hợp đồng − chi phí thực tế. Chi phí của công việc không gắn hợp đồng, và chứng từ không gắn công việc nào, là chi phí chung của công ty.
+- **Nghiệm thu và hóa đơn** lập theo hợp đồng.
+
+### Chuyển đổi từ bản có module Dự án
+
+Migration `2026_07_05_000000_remove_projects` tự chuyển dữ liệu, **không mất gì**:
+
+| Trước | Sau |
+|---|---|
+| Dự án | Một công việc (tên, mô tả, người quản lý → người phụ trách, ngày bắt đầu / kết thúc, ngân sách, hợp đồng, báo giá, khách hàng). Dự án đã huỷ / đã xoá → công việc *Đã huỷ* |
+| Công việc của dự án | Công việc con của công việc đó, cùng hợp đồng |
+| Đề nghị chi, mua hàng, giờ công gắn dự án (không gắn công việc) | Gắn vào công việc đó — chi phí của công việc bằng đúng chi phí của dự án trước đây |
+| Nghiệm thu, hóa đơn, tài liệu của dự án | Gắn vào hợp đồng của dự án |
+| Ngân sách theo nhóm, thành viên dự án | Bỏ (ngân sách còn một số tổng trên công việc) |
+| Quyền Dự án, Ngân sách | Bỏ. Kinh doanh và Quản lý công việc mất quyền Báo giá, Hợp đồng, Nghiệm thu, Hóa đơn, Thanh toán, Công nợ; Kế toán được lập báo giá, hợp đồng, nghiệm thu; Giám đốc toàn quyền với ba mục này và với Công việc. Vai trò tự tạo cũng bị gỡ các quyền trên — cấp lại ở Vai trò & quyền nếu cần |
+| Thông báo cũ về dự án, và về báo giá / hợp đồng / hóa đơn của người không còn quyền xem | Xoá |
+
+Thao tác này **không đảo ngược được** (`migrate:rollback` sẽ báo lỗi): hãy sao lưu database trước khi cập nhật — xem mục 12.
 
 ## Nghiệp vụ Phase 4: chi phí, mua hàng, chấm công, duyệt
 
-**Mọi số chi phí và doanh thu của dự án đều là số trước thuế.**
+**Mọi số chi phí và doanh thu đều là số trước thuế.**
 
 | Nguồn | Tính là "đã cam kết" khi | Tính là "thực tế" khi |
 |---|---|---|
@@ -283,17 +309,17 @@ Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân c
 | Đơn mua hàng | Đã đặt hàng | Đã nhận hàng |
 | Chấm công | — | Ngay khi ghi (giờ × đơn giá giờ của người đó tại thời điểm ghi) |
 
-**Dự án là tuỳ chọn.** Công việc, đề nghị chi, yêu cầu mua hàng, đơn mua hàng và chấm công đều tạo được mà không gắn dự án (để trống ô "Dự án"): đó là *việc độc lập* và *chi phí chung* của công ty. Quy trình duyệt, thanh toán, nhận hàng giữ nguyên. Chi phí chung vẫn nằm trong **chi phí / lợi nhuận theo tháng** của công ty và trong Báo cáo chi phí (nhóm "Chi phí chung"), nhưng không tính vào ngân sách hay lợi nhuận của dự án nào. Các danh sách có bộ lọc **Không gắn dự án**.
+**Công việc là tuỳ chọn trên chứng từ.** Đề nghị chi, yêu cầu mua hàng, đơn mua hàng và chấm công có ô **Công việc**; để trống thì đó là *chi phí chung* của công ty. Quy trình duyệt, thanh toán, nhận hàng giữ nguyên. Chi phí chung vẫn nằm trong **chi phí / lợi nhuận theo tháng** của công ty và trong Báo cáo chi phí (nhóm "Chi phí chung"), nhưng không tính vào công việc hay hợp đồng nào. Các danh sách có bộ lọc **Chi phí chung (không gắn công việc)**. Công việc đã huỷ không nhận thêm chứng từ.
 
-- **Rule 6 / Rule 7**: chi phí thực tế ≥ 80% ngân sách → *Cảnh báo*; > ngân sách → *Vượt ngân sách* (báo cho quản lý dự án và Giám đốc). Ngưỡng 80% sửa ở Hệ thống → Cấu hình.
+- **Rule 6 / Rule 7**: chi phí thực tế ≥ 80% ngân sách → *Cảnh báo*; > ngân sách → *Vượt ngân sách* (báo cho người vừa xem được mọi công việc vừa xem được chi phí nội bộ — mặc định Giám đốc và Quản lý công việc). Tính trên ngân sách của từng công việc. Ngưỡng 80% sửa ở Hệ thống → Cấu hình.
 - **Đề nghị chi (Rule 9)**: Nháp → các bước duyệt → Đã duyệt → Đã thanh toán → Hoàn tất. **Rule 2**: chỉ thanh toán được khoản đã duyệt xong.
 - **Quy trình duyệt cấu hình được** ở **Hệ thống → Quy trình duyệt** (bảng `approval_rules`: loại chứng từ, khoảng số tiền, vai trò duyệt, thứ tự). Mặc định:
 
   | Số tiền | Đề nghị chi | Yêu cầu mua hàng |
   |---|---|---|
-  | Dưới 5 triệu | Quản lý dự án → Kế toán | Quản lý dự án → Kế toán |
-  | 5 – 20 triệu | Quản lý dự án → Kế toán → **Quản lý** | Quản lý dự án → Kế toán |
-  | Trên 20 triệu | Quản lý dự án → Kế toán → Giám đốc | Quản lý dự án → Kế toán → Giám đốc |
+  | Dưới 5 triệu | Quản lý công việc → Kế toán | Quản lý công việc → Kế toán |
+  | 5 – 20 triệu | Quản lý công việc → Kế toán → **Quản lý** | Quản lý công việc → Kế toán |
+  | Trên 20 triệu | Quản lý công việc → Kế toán → Giám đốc | Quản lý công việc → Kế toán → Giám đốc |
 
   > Hệ thống có 7 vai trò và không có vai trò "Quản lý" riêng, nên bước **Quản lý** (5 – 20 triệu) mặc định giao cho vai trò **Director**. Nếu công ty có cấp quản lý riêng: tạo vai trò mới ở Vai trò & quyền rồi đổi vai trò duyệt của bước này.
 
@@ -303,7 +329,7 @@ Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân c
 
 ## Nghiệp vụ Phase 5: nghiệm thu → hóa đơn → thanh toán → công nợ
 
-- **Nghiệm thu**: Nháp → Chờ duyệt → Đã nghiệm thu / Bị từ chối. Biên bản đã nghiệm thu là căn cứ lập hóa đơn.
+- **Nghiệm thu** (lập theo hợp đồng, mặc định do Kế toán lập, Giám đốc duyệt): Nháp → Chờ duyệt → Đã nghiệm thu / Bị từ chối. Biên bản đã nghiệm thu là căn cứ lập hóa đơn.
 - **Hóa đơn**: Nháp → Đã phát hành → Thu một phần → Đã thu đủ; quá ngày đến hạn mà chưa thu đủ → Quá hạn. Sau khi phát hành, trạng thái luôn được **suy ra** từ số đã thu và ngày đến hạn — không ai tự đặt "Đã thu đủ" được (**Rule 3**).
 - **Rule 4**: hóa đơn đã phát hành không xoá được (chỉ huỷ, có lý do, khi chưa thu đồng nào).
 - **Rule 5**: thanh toán đã ghi nhận không sửa, không xoá — kể cả Super Admin. Ghi nhầm thì phải xử lý bằng nghiệp vụ, không sửa lịch sử.
@@ -320,7 +346,7 @@ Tiền được lưu bằng `DECIMAL(15,2)` và tính bằng số thập phân c
 | Lợi nhuận | Doanh thu − Chi phí |
 | Biên lợi nhuận | Lợi nhuận ÷ Doanh thu × 100 |
 
-Lợi nhuận **từng dự án** tính trên giá trị hợp đồng của dự án: Giá trị hợp đồng − Chi phí thực tế (không gồm chi phí chung không gắn dự án; phần này chỉ trừ vào lợi nhuận theo tháng của công ty). Đánh giá biên lợi nhuận: trên 30% *Tốt*, 20–30% *Bình thường*, dưới 20% *Cảnh báo*, dưới 10% *Nguy hiểm* (ngưỡng sửa ở Cấu hình).
+Lợi nhuận **từng hợp đồng**: Giá trị hợp đồng − Chi phí thực tế của các công việc gắn với hợp đồng (không gồm chi phí chung; phần này chỉ trừ vào lợi nhuận theo tháng của công ty). Đánh giá biên lợi nhuận: trên 30% *Tốt*, 20–30% *Bình thường*, dưới 20% *Cảnh báo*, dưới 10% *Nguy hiểm* (ngưỡng sửa ở Cấu hình).
 
 **Doanh thu theo dịch vụ**: hóa đơn không ghi từng dịch vụ, nên doanh thu của mỗi hóa đơn được chia theo tỷ trọng các hạng mục trong báo giá của hợp đồng. Hợp đồng không lập từ báo giá được xếp vào "Chưa phân loại".
 
@@ -331,20 +357,21 @@ Lợi nhuận **từng dự án** tính trên giá trị hợp đồng của d�
 | Doanh thu tháng, doanh thu theo tháng / theo dịch vụ | Có quyền xem Hóa đơn hoặc Báo cáo tài chính |
 | Chi phí, lợi nhuận, biên lợi nhuận (thẻ và biểu đồ theo tháng) | Có quyền Báo cáo tài chính |
 | Công nợ, tuổi nợ | Có quyền xem Công nợ |
-| Chi phí so với ngân sách, lợi nhuận theo dự án | Có quyền xem Dự án và "Chi phí nội bộ & giá vốn" |
-| Dự án cần chú ý | Có quyền xem Dự án (không có quyền chi phí nội bộ thì chỉ thấy dự án trễ hạn) |
+| Lợi nhuận theo hợp đồng | Có quyền xem Hợp đồng và "Chi phí nội bộ & giá vốn" |
+| Công việc theo trạng thái | Có quyền xem Công việc |
+| Công việc cần chú ý | Có quyền xem Công việc (không có quyền chi phí nội bộ thì chỉ thấy công việc quá hạn) |
 | Cần xử lý | Mọi người — mỗi dòng đếm đúng số chứng từ người đó được xem và bấm vào mở danh sách đã lọc sẵn |
-| Hoạt động gần đây | Mọi người thấy thao tác của mình; có quyền Audit Log thì thấy của tất cả |
+| Hoạt động gần đây | Mọi người thấy thao tác của mình (trừ thao tác trên báo giá, hợp đồng, nghiệm thu, hóa đơn, thanh toán nếu nay không còn quyền xem các mục đó); có quyền Audit Log thì thấy của tất cả |
 
-Người không xem được số liệu tài chính (nhân viên, quản lý dự án…) thấy thẻ về dự án, công việc và đề nghị chi của chính mình.
+Người không xem được số liệu tài chính (nhân viên, quản lý công việc…) thấy thẻ về công việc và đề nghị chi của chính mình.
 
-**Báo cáo** (nhóm Tài chính, quyền "Báo cáo tài chính"): Báo cáo lợi nhuận (theo dự án), Báo cáo doanh thu (lọc theo ngày, khách hàng, dự án, dịch vụ), Báo cáo chi phí (lọc theo ngày, dự án, nhóm chi phí, nhà cung cấp, nguồn). Báo cáo công nợ là màn hình **Công nợ**; báo cáo ngân sách – thực tế là màn hình **Ngân sách**.
+**Báo cáo** (nhóm Tài chính, quyền "Báo cáo tài chính"): Báo cáo lợi nhuận (theo hợp đồng), Báo cáo doanh thu (lọc theo ngày, khách hàng, hợp đồng, dịch vụ), Báo cáo chi phí (lọc theo ngày, công việc, hợp đồng, nhóm chi phí, nhà cung cấp, nguồn). Báo cáo công nợ là màn hình **Công nợ**; ngân sách – thực tế của từng công việc xem ở mục **Công việc** (tab *Vượt ngân sách*, cột *Chi phí / ngân sách*).
 
-**Xuất dữ liệu** (CSV và Excel): Khách hàng, Báo giá, Dự án, Ngân sách, Chi phí, Hóa đơn, Thanh toán, Công nợ và ba báo cáo. File chứa đúng những dòng đang hiển thị theo tab, bộ lọc và ô tìm kiếm (mọi trang, không chỉ trang đang xem). Cần quyền "Xuất dữ liệu" của module; cột giá vốn / chi phí chỉ có khi người xuất được xem chi phí nội bộ. Mỗi lần xuất được ghi vào Audit Log.
+**Xuất dữ liệu** (CSV và Excel): Khách hàng, Báo giá, Công việc, Chi phí, Hóa đơn, Thanh toán, Công nợ và ba báo cáo. File chứa đúng những dòng đang hiển thị theo tab, bộ lọc và ô tìm kiếm (mọi trang, không chỉ trang đang xem). Cần quyền "Xuất dữ liệu" của module; cột giá vốn / chi phí chỉ có khi người xuất được xem chi phí nội bộ, cột hợp đồng / báo giá chỉ có khi họ được xem hợp đồng / báo giá. Mỗi lần xuất được ghi vào Audit Log.
 
-**Thông báo** hiện ở chuông trên thanh trên cùng và ở **Hệ thống → Thông báo** (giữ cả thông báo đã đọc): báo giá / đề nghị chi / yêu cầu mua hàng cần duyệt và kết quả duyệt, dự án vượt ngân sách, dự án sắp tới hạn, hợp đồng sắp hết hạn, hóa đơn sắp tới hạn, hóa đơn quá hạn.
+**Thông báo** hiện ở chuông trên thanh trên cùng và ở **Hệ thống → Thông báo** (giữ cả thông báo đã đọc): báo giá / đề nghị chi / yêu cầu mua hàng cần duyệt và kết quả duyệt, công việc vượt ngân sách, hợp đồng sắp hết hạn, hóa đơn sắp tới hạn, hóa đơn quá hạn (ba loại sau chỉ gửi cho người còn quyền xem hợp đồng / hóa đơn).
 
-**Audit Log** (Hệ thống → Audit Log, quyền `audit_logs.view`): ghi ai, làm gì, trên bản ghi nào, giá trị trước / sau, địa chỉ IP, trình duyệt, thời điểm — cho các thao tác tạo, sửa, đổi trạng thái (duyệt, thanh toán, phát hành…), xoá, khôi phục, đăng nhập, xuất dữ liệu, đổi cấu hình, đổi phân quyền. Nhật ký chỉ để xem: không sửa, không xoá được, kể cả Super Admin. Mật khẩu không bao giờ được ghi. Các trang Khách hàng, Báo giá, Hợp đồng, Dự án, Chi phí, Hóa đơn có tab **Hoạt động** cho riêng bản ghi đó.
+**Audit Log** (Hệ thống → Audit Log, quyền `audit_logs.view`): ghi ai, làm gì, trên bản ghi nào, giá trị trước / sau, địa chỉ IP, trình duyệt, thời điểm — cho các thao tác tạo, sửa, đổi trạng thái (duyệt, thanh toán, phát hành…), xoá, khôi phục, đăng nhập, xuất dữ liệu, đổi cấu hình, đổi phân quyền. Nhật ký chỉ để xem: không sửa, không xoá được, kể cả Super Admin. Mật khẩu không bao giờ được ghi. Các trang Khách hàng, Báo giá, Hợp đồng, Chi phí, Hóa đơn có tab **Hoạt động** cho riêng bản ghi đó.
 
 **Cấu hình** (Hệ thống → Cấu hình; xem: `settings.view`, sửa: `settings.update` — mặc định chỉ Super Admin): thông tin công ty và các ngưỡng nghiệp vụ. Thay đổi có hiệu lực ngay và được ghi vào Audit Log.
 
@@ -352,21 +379,20 @@ Người không xem được số liệu tài chính (nhân viên, quản lý d�
 
 ## Lịch làm việc
 
-Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai làm việc gì, lúc nào, ở đâu, cho dự án nào.
+Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai làm việc gì, lúc nào, ở đâu, cho khách hàng nào.
 
-**Lịch tự lấy từ Công việc và Dự án — trang Lịch chỉ để xem.** Không có nút thêm, sửa hay xoá lịch công việc ở trang Lịch; muốn thêm hoặc đổi lịch thì tạo / sửa **công việc** (mục Công việc, tab Công việc của dự án, bảng Kanban):
+**Lịch tự lấy từ Công việc — trang Lịch chỉ để xem.** Không có nút thêm, sửa hay xoá lịch công việc ở trang Lịch; muốn thêm hoặc đổi lịch thì tạo / sửa **công việc** (mục Công việc, bảng Kanban, tab Công việc của hợp đồng):
 
 - Công việc **có ngày bắt đầu** tự hiện trên lịch, từ ngày bắt đầu tới hạn hoàn thành (không có hạn: một ngày). Công việc chưa có ngày bắt đầu, hoặc kéo dài quá 2 tháng, không lên lịch.
-- Phần **Lịch làm việc** trong form công việc quyết định lịch trông thế nào: loại lịch, cả ngày hay từ giờ – đến giờ, ê-kíp (người phụ trách luôn có trong ê-kíp, thêm được cộng tác viên ngoài), địa điểm, thiết bị, khách hàng (với việc độc lập; việc thuộc dự án theo khách hàng của dự án), "lịch dự kiến (chưa chốt)".
+- Phần **Lịch làm việc** trong form công việc quyết định lịch trông thế nào: loại lịch, cả ngày hay từ giờ – đến giờ, ê-kíp (người phụ trách luôn có trong ê-kíp, thêm được cộng tác viên ngoài), địa điểm, thiết bị, khách hàng (việc gắn hợp đồng / báo giá thì theo khách hàng của hợp đồng / báo giá), "lịch dự kiến (chưa chốt)".
 - Sửa công việc → lịch đổi theo ngay. Công việc *Hoàn thành* → lịch *Đã xong*; *Đã huỷ* → *Đã huỷ*; còn lại là *Đã chốt* (hoặc *Dự kiến*). Bỏ ngày bắt đầu hoặc xoá công việc → lịch mất (lịch đã ghi giờ công thì giữ lại để tra cứu).
 - Bấm một lịch để xem chi tiết; nút **Mở công việc** đưa tới trang công việc để sửa lịch, xem chi phí và ngân sách.
-- Từ **dự án**, lịch có thêm mốc hạn hoàn thành của các dự án đang mở (hiện ở đầu ngày), và trang dự án có tab **Lịch** liệt kê lịch của các công việc thuộc dự án.
 - **Việc dài ngày** — công việc cả ngày kéo dài hơn 3 ngày, ví dụ hậu kỳ hai tuần — hiện gọn thành một dải ở đầu mỗi ngày (quá 3 việc thì gom lại, bấm để mở) và **không tính là trùng lịch**, vì người làm việc dài ngày vẫn nhận được buổi quay khác. Chuyến đi quay cả ngày tới 3 ngày, hoặc việc có nhập giờ, vẫn giữ chỗ như thường.
 - Lịch nghỉ là ngoại lệ duy nhất nhập ở trang Lịch (nút **Đăng ký nghỉ**).
 
 **Dữ liệu nhập bằng mã** (seeder, tích hợp gọi `ScheduleManager::save()`): lịch tạo theo cách này tự có công việc của nó và hai bên vẫn luôn khớp nhau; một lịch cũng có thể gắn thêm vào công việc có sẵn (`task_id`). Dữ liệu của bản trước được nối lại khi chạy migration: lịch cũ có công việc, công việc cũ có ngày bắt đầu có lịch.
 
-**Bốn cách xem:** *Tuần* (mỗi ngày chia Sáng / Chiều – tối, trước và sau 12:00), *Tháng*, *Theo người* (mỗi người một hàng — thấy ngay ai còn trống), *Lịch của tôi* (30 ngày tới của người đang đăng nhập). Màn hình hẹp tự xếp dọc từng ngày. Dashboard có khối "Lịch của tôi" cho 7 ngày tới, trang dự án có tab **Lịch**.
+**Bốn cách xem:** *Tuần* (mỗi ngày chia Sáng / Chiều – tối, trước và sau 12:00), *Tháng*, *Theo người* (mỗi người một hàng — thấy ngay ai còn trống), *Lịch của tôi* (30 ngày tới của người đang đăng nhập). Màn hình hẹp tự xếp dọc từng ngày. Dashboard có khối "Lịch của tôi" cho 7 ngày tới, trang công việc có tab **Lịch**.
 
 **Quyền:**
 
@@ -375,8 +401,8 @@ Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai là
 | Xem toàn bộ lịch | Mọi người dùng (module này không có quyền "Xem") |
 | Thêm / đổi lịch công việc | Người được tạo công việc (`tasks.create`) — nhập ở form công việc. Người chỉ được cập nhật công việc của mình đổi được trạng thái, tiến độ; lịch đi theo |
 | Đăng ký nghỉ, sửa / xoá lịch nghỉ của chính mình | Mọi người dùng (nút **Đăng ký nghỉ**) |
-| Đăng ký nghỉ hộ người khác, sửa / xoá lịch nghỉ của người khác | Quyền `schedules.create` / `update` / `delete` — mặc định Giám đốc và Quản lý dự án |
-| Sửa danh mục loại lịch (Hệ thống → Loại lịch) | Quyền `schedule_types.*` — mặc định Giám đốc và Quản lý dự án |
+| Đăng ký nghỉ hộ người khác, sửa / xoá lịch nghỉ của người khác | Quyền `schedules.create` / `update` / `delete` — mặc định Giám đốc và Quản lý công việc |
+| Sửa danh mục loại lịch (Hệ thống → Loại lịch) | Quyền `schedule_types.*` — mặc định Giám đốc và Quản lý công việc |
 | Bật / đổi / tắt đường dẫn chỉ-xem | Quyền `schedules.update` |
 | Ghi giờ công từ lịch | Quyền sửa lịch + quyền ghi giờ công cho người khác (`timesheets.create`, `timesheets.view_all`) |
 
@@ -384,9 +410,9 @@ Lịch chung của công ty tại **Tổng quan → Lịch làm việc**: ai là
 
 **Thông báo:** người phụ trách và ê-kíp của công việc được báo khi công việc lên lịch, lịch đổi giờ / đổi địa điểm, bị rút khỏi ê-kíp, công việc bị huỷ, và được nhắc về lịch ngày mai (lệnh `reminders:send`, chạy 07:30 và 17:00). Người tự thao tác không nhận thông báo về chính thao tác đó; lịch đã qua (nhập bù) không tạo thông báo. Khi có người đăng ký nghỉ, những người có quyền của module Lịch làm việc được báo.
 
-**Trang công việc** (bấm vào một dòng ở mục Công việc): Ngân sách · Đã cam kết · Chi phí thực tế · Còn lại, cảnh báo *Vượt ngân sách*, và các tab Chi phí (đề nghị chi), Mua hàng, Chấm công, Lịch. Đề nghị chi, yêu cầu / đơn mua hàng có ô **Công việc**; chứng từ gắn công việc luôn thuộc dự án của công việc đó. Chi phí của công việc tính theo đúng quy tắc của dự án (bảng "cam kết / thực tế" ở Phase 4), số trước thuế. Việc đã xong vẫn nhận thêm chi phí; việc đã huỷ thì không. Trang công việc cũng cho biết công việc đang nằm ở đâu trên lịch (thời gian, loại lịch, ê-kíp, địa điểm). Người trong ê-kíp thấy công việc và gắn được đề nghị chi của mình vào đó, nhưng không thấy ngân sách và chi phí.
+**Trang công việc** (bấm vào một dòng ở mục Công việc): Ngân sách · Đã cam kết · Chi phí thực tế · Còn lại, cảnh báo *Vượt ngân sách*, và các tab Chi phí (đề nghị chi), Mua hàng, Chấm công, Lịch. Đề nghị chi, yêu cầu / đơn mua hàng có ô **Công việc**; chi phí của công việc tính theo bảng "cam kết / thực tế" ở Phase 4, số trước thuế, gồm cả chứng từ của các công việc con. Việc đã xong vẫn nhận thêm chi phí; việc đã huỷ thì không. Trang công việc cũng cho biết công việc đang nằm ở đâu trên lịch (thời gian, loại lịch, ê-kíp, địa điểm). Người trong ê-kíp thấy công việc và gắn được đề nghị chi của mình vào đó, nhưng không thấy ngân sách và chi phí.
 
-**Ghi giờ công từ lịch:** với lịch đã diễn ra (trừ lịch nghỉ), nút **Ghi giờ công** tạo cho mỗi người trong ê-kíp một dòng giờ công cho từng ngày của lịch (số giờ gợi ý = thời lượng lịch, hoặc 8 giờ/ngày với lịch cả ngày, nhiều ngày). Giờ công vào công việc của lịch và tự thành chi phí nhân sự của dự án; lịch không gắn dự án thì thành chi phí chung. Ghi giờ công xong thì lịch và công việc cùng chuyển sang đã xong. Bấm lại không ghi trùng.
+**Ghi giờ công từ lịch:** với lịch đã diễn ra (trừ lịch nghỉ), nút **Ghi giờ công** tạo cho mỗi người trong ê-kíp một dòng giờ công cho từng ngày của lịch (số giờ gợi ý = thời lượng lịch, hoặc 8 giờ/ngày với lịch cả ngày, nhiều ngày). Giờ công vào công việc của lịch và tự thành chi phí nhân sự của công việc đó. Ghi giờ công xong thì lịch và công việc cùng chuyển sang đã xong. Bấm lại không ghi trùng.
 
 **Chia sẻ ra ngoài hệ thống** (nút **Chia sẻ** trên trang lịch):
 
@@ -405,17 +431,18 @@ Test chạy bằng SQLite trong bộ nhớ (cấu hình trong `phpunit.xml`), kh
 ```
 
 - Phase 1: đăng nhập, tài khoản bị khoá, phân quyền theo vai trò, quản lý người dùng, quản lý vai trò & quyền, điều hướng theo quyền, định dạng tiền tệ.
-- Phase 2: sinh mã chứng từ, tạo khách hàng, liên hệ chính, danh mục dịch vụ, doanh thu kỳ vọng của cơ hội, tính toán báo giá, quy trình duyệt báo giá (kể cả quy tắc Giám đốc duyệt), khoá hạng mục sau khi gửi duyệt, hết hạn báo giá, ẩn giá vốn với Sales.
+- Phase 2: sinh mã chứng từ, tạo khách hàng, liên hệ chính, danh mục dịch vụ, doanh thu kỳ vọng của cơ hội, tính toán báo giá, quy trình duyệt báo giá (kể cả quy tắc Giám đốc duyệt), khoá hạng mục sau khi gửi duyệt, hết hạn báo giá, ẩn giá vốn với người không có quyền chi phí nội bộ.
 
-- Phase 3: hợp đồng và Rule 1, dự án và phạm vi xem theo thành viên, ngân sách, công việc và Kanban, tài liệu đính kèm.
-- Phase 4: bộ máy duyệt theo số tiền, quy trình đề nghị chi (Rule 2, Rule 9), mua hàng, chấm công, chi phí cam kết / thực tế và cảnh báo ngân sách (Rule 6, Rule 7).
+- Phase 3: hợp đồng, công việc và bảng Kanban, tài liệu đính kèm.
+- Công việc ↔ hợp đồng / báo giá: gắn – gỡ, công việc con theo công việc cha, chi phí và lợi nhuận của hợp đồng, tab Công việc của hợp đồng, và **quyền xem**: người không có quyền Hợp đồng / Báo giá không thấy chúng ở bất kỳ trang, form, file xuất, thông báo hay nhật ký nào, và không làm đổi được liên kết.
+- Phase 4: bộ máy duyệt theo số tiền, quy trình đề nghị chi (Rule 2, Rule 9), mua hàng, chấm công, chi phí cam kết / thực tế của công việc (cộng dồn từ công việc con) và cảnh báo ngân sách (Rule 6, Rule 7).
 - Phase 5: nghiệm thu, hóa đơn (Rule 3, Rule 4), thanh toán (Rule 5, không thu quá số còn lại), tuổi nợ.
-- Phase 6: doanh thu – chi phí – lợi nhuận theo tháng, tổng dòng chi phí khớp chi phí thực tế của dự án, chia doanh thu theo dịch vụ, dashboard theo từng vai trò, "Cần xử lý" khớp danh sách, báo cáo và bộ lọc, xuất CSV / Excel và quyền xuất, nhắc việc không trùng, màn hình thông báo, audit log (giá trị trước / sau, người thực hiện, che mật khẩu, không sửa xoá được), cấu hình.
+- Phase 6: doanh thu – chi phí – lợi nhuận theo tháng, tổng dòng chi phí khớp chi phí thực tế của công việc và hợp đồng, chia doanh thu theo dịch vụ, dashboard theo từng vai trò, "Cần xử lý" khớp danh sách, báo cáo và bộ lọc, xuất CSV / Excel và quyền xuất, nhắc việc không trùng, màn hình thông báo, audit log (giá trị trước / sau, người thực hiện, che mật khẩu, không sửa xoá được), cấu hình.
 
 - Công việc → lịch: công việc có ngày bắt đầu tự lên lịch, lịch đổi theo mọi thay đổi của công việc, giờ / nhiều ngày / quá 2 tháng, thông báo cho ê-kíp, trang Lịch không thêm – sửa – xoá được công việc, việc dài ngày không tính trùng lịch, nối dữ liệu cũ.
-- Lịch → công việc (dữ liệu nhập bằng mã) và tiền của công việc: lịch tự có công việc và ngân sách, gắn vào công việc có sẵn, sửa / huỷ / xoá lịch đồng bộ sang công việc, chi phí cam kết / thực tế của công việc từ đề nghị chi – mua hàng – giờ công, chuyển dự án kéo theo chứng từ, quyền xem của ê-kíp, trang công việc, tạo bù công việc cho lịch cũ.
-- Dự án là tuỳ chọn: việc độc lập, đề nghị chi / mua hàng / chấm công không gắn dự án đi đủ quy trình, tính vào chi phí tháng mà không vào dự án nào, bộ lọc "Không gắn dự án", nhóm "Chi phí chung" trong báo cáo chi phí.
-- Lịch làm việc: nhãn thời gian và lịch cả ngày / nhiều ngày, phát hiện trùng lịch và trùng ngày nghỉ, quyền xếp lịch và tự quản lịch nghỉ, thông báo cho ê-kíp, sắp lịch theo tuần / tháng / người, mốc dự án, sửa – xoá lịch nghỉ từ trang lịch, ghi giờ công không trùng, nhắc lịch ngày mai, đường dẫn chỉ-xem (bật / đổi / tắt, 404 với mã sai), nguồn iCalendar.
+- Lịch → công việc (dữ liệu nhập bằng mã) và tiền của công việc: lịch tự có công việc và ngân sách, gắn vào công việc có sẵn, sửa / huỷ / xoá lịch đồng bộ sang công việc, chi phí cam kết / thực tế của công việc từ đề nghị chi – mua hàng – giờ công, quyền xem của ê-kíp, trang công việc, tạo bù công việc cho lịch cũ.
+- Chi phí chung: đề nghị chi / mua hàng / chấm công không gắn công việc đi đủ quy trình, tính vào chi phí tháng mà không vào công việc hay hợp đồng nào, bộ lọc "Chi phí chung", nhóm "Chi phí chung" trong báo cáo chi phí.
+- Lịch làm việc: nhãn thời gian và lịch cả ngày / nhiều ngày, phát hiện trùng lịch và trùng ngày nghỉ, quyền xếp lịch và tự quản lịch nghỉ, thông báo cho ê-kíp, sắp lịch theo tuần / tháng / người, sửa – xoá lịch nghỉ từ trang lịch, ghi giờ công không trùng, nhắc lịch ngày mai, đường dẫn chỉ-xem (bật / đổi / tắt, 404 với mã sai), nguồn iCalendar.
 
 > Chỉ chạy test khi `APP_ENV=local`. Test dùng `RefreshDatabase`; nếu cấu hình bị cache (production), bộ test sẽ tự từ chối chạy để không xoá dữ liệu thật.
 
@@ -452,6 +479,10 @@ git pull
 docker compose exec app composer install --no-dev --optimize-autoloader
 docker compose restart app queue scheduler   # app tự chạy migration và cache lại cấu hình
 ```
+
+Nếu cập nhật bằng cách **chép đè** (rsync, giải nén) thay vì `git pull`: chép đè không xoá file của những module đã bỏ. Container `app` tự dọn các file đó mỗi lần khởi động (`scripts/remove-retired-files.sh` — chỉ xoá đúng danh sách file mã nguồn ghi trong script); cũng có thể chạy tay `./scripts/remove-retired-files.sh` trước khi restart.
+
+Bản cập nhật có migration **không đảo ngược được** (ví dụ bản bỏ module Dự án) thì sao lưu trước: `./scripts/backup-db.sh`.
 
 Lưu ý khi chạy production:
 

@@ -148,9 +148,9 @@ class SystemSettings extends Page
      */
     private function marginError(array $values): ?string
     {
-        $danger = (float) ($values['project.margin_danger'] ?? 0);
-        $warning = (float) ($values['project.margin_warning'] ?? 0);
-        $good = (float) ($values['project.margin_good'] ?? 0);
+        $danger = (float) ($values['job.margin_danger'] ?? 0);
+        $warning = (float) ($values['job.margin_warning'] ?? 0);
+        $good = (float) ($values['job.margin_good'] ?? 0);
 
         return $danger < $warning && $warning <= $good
             ? null

@@ -4,7 +4,6 @@ namespace App\Filament\Resources\PurchaseOrders\Schemas;
 
 use App\Enums\BudgetCategory;
 use App\Enums\PurchaseRequestStatus;
-use App\Filament\Resources\BudgetItems\Schemas\BudgetItemForm;
 use App\Filament\Resources\Expenses\Schemas\ExpenseForm;
 use App\Filament\Support\Fields;
 use App\Filament\Support\TaskField;
@@ -29,7 +28,7 @@ use Illuminate\Validation\Rule;
 /**
  * Form đơn mua hàng: thông tin chung, các dòng hàng và phần tổng xem trước.
  * Số chính thức được tính lại ở server khi lưu (PurchaseOrderWorkflow::recalculate()).
- * Mở từ một yêu cầu mua hàng đã duyệt (?request=ID) thì dự án, nhà cung cấp,
+ * Mở từ một yêu cầu mua hàng đã duyệt (?request=ID) thì công việc, nhà cung cấp,
  * nhóm chi phí và dòng hàng đầu tiên được điền sẵn.
  */
 class PurchaseOrderForm
@@ -61,7 +60,6 @@ class PurchaseOrderForm
                                     return;
                                 }
 
-                                $set('project_id', $request->project_id);
                                 $set('task_id', $request->task_id);
                                 $set('supplier_id', $request->supplier_id);
                                 $set('category', $request->category->value);
@@ -73,15 +71,6 @@ class PurchaseOrderForm
                             ->default(fn (): ?int => static::sourceRequest()?->supplier_id)
                             ->searchable()
                             ->required(),
-                        Select::make('project_id')
-                            ->label('Dự án')
-                            ->options(fn (): array => BudgetItemForm::projectOptions())
-                            ->default(fn (): ?int => static::sourceRequest()?->project_id)
-                            ->searchable()
-                            ->placeholder('Không gắn dự án')
-                            ->helperText('Bỏ trống nếu mua cho công ty dùng chung, không thuộc dự án nào.')
-                            ->live()
-                            ->afterStateUpdated(fn (Set $set): mixed => $set('task_id', null)),
                         TaskField::select()
                             ->default(fn (): ?int => static::sourceRequest()?->task_id),
                         Select::make('category')

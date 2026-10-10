@@ -4,7 +4,6 @@ namespace App\Filament\Resources\PurchaseOrders;
 
 use App\Enums\PurchaseOrderStatus;
 use App\Filament\Resources\Expenses\Schemas\ExpenseForm;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\PurchaseOrders\Pages\CreatePurchaseOrder;
 use App\Filament\Resources\PurchaseOrders\Pages\EditPurchaseOrder;
 use App\Filament\Resources\PurchaseOrders\Pages\ListPurchaseOrders;
@@ -50,7 +49,7 @@ class PurchaseOrderResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static ?string $navigationLabel = 'Đơn mua hàng';
 
@@ -87,12 +86,6 @@ class PurchaseOrderResource extends Resource
                             ->badge(),
                         TextEntry::make('supplier.name')
                             ->label('Nhà cung cấp'),
-                        TextEntry::make('project.name')
-                            ->label('Dự án')
-                            ->placeholder('Không gắn dự án')
-                            ->url(fn (PurchaseOrder $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
-                                ? ProjectResource::getUrl('view', ['record' => $record->project])
-                                : null),
                         TaskField::entry(),
                         TextEntry::make('category')
                             ->label('Nhóm chi phí')
@@ -168,7 +161,7 @@ class PurchaseOrderResource extends Resource
                 Columns::code(label: 'Số đơn'),
                 TextColumn::make('supplier.name')
                     ->label('Nhà cung cấp')
-                    ->description(fn (PurchaseOrder $record): ?string => implode(' · ', array_filter([$record->project?->name, $record->task?->name])) ?: null)
+                    ->description(fn (PurchaseOrder $record): ?string => $record->task?->name)
                     ->wrap()
                     ->searchable(),
                 TextColumn::make('order_date')
@@ -194,12 +187,7 @@ class PurchaseOrderResource extends Resource
                     ->label('Nhà cung cấp')
                     ->options(fn (): array => ExpenseForm::supplierOptions())
                     ->searchable(),
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
-                    ->searchable()
-                    ->preload(),
-                Filters::withoutProject(),
+                Filters::withoutTask(),
                 Filters::dateRange('order_date', 'Ngày đặt hàng'),
             ])
             ->recordActions([
@@ -228,7 +216,7 @@ class PurchaseOrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['supplier', 'project', 'task']);
+        return parent::getEloquentQuery()->with(['supplier', 'task']);
     }
 
     /**

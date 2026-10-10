@@ -2,25 +2,24 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ProjectStatus;
 use App\Enums\SystemRole;
+use App\Enums\TaskStatus;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Resources\Expenses\ExpenseResource;
 use App\Filament\Resources\Invoices\InvoiceResource;
-use App\Filament\Resources\Projects\ProjectResource;
+use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\ActionItems;
-use App\Filament\Widgets\AttentionProjects;
+use App\Filament\Widgets\AttentionTasks;
+use App\Filament\Widgets\ContractProfitabilityChart;
 use App\Filament\Widgets\ExpenseByMonth;
-use App\Filament\Widgets\ExpenseVsBudget;
 use App\Filament\Widgets\KpiOverview;
 use App\Filament\Widgets\PendingActions;
 use App\Filament\Widgets\ProfitByMonth;
-use App\Filament\Widgets\ProjectProfitabilityChart;
-use App\Filament\Widgets\ProjectStatusChart;
 use App\Filament\Widgets\ReceivableAgingChart;
 use App\Filament\Widgets\RecentActivity;
 use App\Filament\Widgets\RevenueByMonth;
 use App\Filament\Widgets\RevenueByServiceChart;
+use App\Filament\Widgets\TaskStatusChart;
 use App\Models\Customer;
 use App\Models\Task;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,7 +27,7 @@ use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\Concerns\BuildsExpenses;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 /**
@@ -38,7 +37,7 @@ class DashboardTest extends TestCase
 {
     use BuildsExpenses;
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -65,21 +64,23 @@ class DashboardTest extends TestCase
     public function test_each_role_sees_only_the_widgets_it_is_allowed_to(): void
     {
         $finance = [RevenueByMonth::class, ExpenseByMonth::class, ProfitByMonth::class, RevenueByServiceChart::class, ReceivableAgingChart::class];
-        $projects = [ExpenseVsBudget::class, ProjectProfitabilityChart::class, ProjectStatusChart::class, AttentionProjects::class];
+        $tasks = [TaskStatusChart::class, AttentionTasks::class];
+        $contracts = [ContractProfitabilityChart::class];
 
         $expected = [
-            SystemRole::Director->value => [...$finance, ...$projects],
-            SystemRole::Accountant->value => [...$finance, ...$projects],
-            // Kinh doanh: thấy doanh thu và công nợ, không thấy chi phí / lợi nhuận.
-            SystemRole::Sales->value => [RevenueByMonth::class, RevenueByServiceChart::class, ReceivableAgingChart::class, ProjectStatusChart::class, AttentionProjects::class],
-            SystemRole::ProjectManager->value => $projects,
-            SystemRole::Employee->value => [ProjectStatusChart::class, AttentionProjects::class],
+            SystemRole::Director->value => [...$finance, ...$tasks, ...$contracts],
+            SystemRole::Accountant->value => [...$finance, ...$tasks, ...$contracts],
+            // Kinh doanh: không còn thấy doanh thu, công nợ, hợp đồng — và không có quyền với công việc.
+            SystemRole::Sales->value => [],
+            // Quản lý công việc: thấy công việc, không thấy gì về hợp đồng.
+            SystemRole::ProjectManager->value => $tasks,
+            SystemRole::Employee->value => $tasks,
         ];
 
         foreach ($expected as $role => $visible) {
             $this->actingAs($this->approver(SystemRole::from($role)));
 
-            foreach ([...$finance, ...$projects] as $widget) {
+            foreach ([...$finance, ...$tasks, ...$contracts] as $widget) {
                 $this->assertSame(
                     in_array($widget, $visible, true),
                     $widget::canView(),
@@ -101,7 +102,7 @@ class DashboardTest extends TestCase
             ->assertSeeInOrder(['Biên lợi nhuận', '70%'])
             // Còn phải thu: 44.000.000 (tháng này) + 22.000.000 (tháng trước, quá hạn).
             ->assertSeeInOrder(['Công nợ phải thu', '66.000.000 ₫', '1 hóa đơn quá hạn · 22.000.000 ₫'])
-            ->assertSeeInOrder(['Dự án đang chạy', '1 dự án vượt ngân sách']);
+            ->assertSeeInOrder(['Công việc đang mở', '1 công việc vượt ngân sách']);
     }
 
     public function test_people_without_finance_access_get_personal_cards_instead(): void
@@ -109,17 +110,17 @@ class DashboardTest extends TestCase
         $this->seedBusyCompany();
 
         $employee = $this->approver(SystemRole::Employee);
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
 
-        Task::factory()->create(['project_id' => $project->getKey(), 'assignee_id' => $employee->getKey(), 'due_date' => today()->subDay()]);
-        Task::factory()->create(['project_id' => $project->getKey(), 'assignee_id' => $employee->getKey(), 'due_date' => today()->addWeek()]);
+        Task::factory()->create(['assignee_id' => $employee->getKey(), 'due_date' => today()->subDay()]);
+        Task::factory()->create(['assignee_id' => $employee->getKey(), 'due_date' => today()->addWeek()]);
 
         Livewire::actingAs($employee)
             ->test(KpiOverview::class)
             ->assertDontSee('Doanh thu tháng này')
             ->assertDontSee('Chi phí tháng này')
             ->assertDontSee('Công nợ phải thu')
-            ->assertSeeInOrder(['Dự án của tôi đang chạy', 'Công việc của tôi', '1 việc đã quá hạn']);
+            ->assertDontSee('Công việc đang mở')
+            ->assertSeeInOrder(['Công việc của tôi', '1 việc đã quá hạn']);
     }
 
     public function test_action_items_count_exactly_what_the_linked_lists_show(): void
@@ -135,8 +136,8 @@ class DashboardTest extends TestCase
         $this->assertSame(InvoiceResource::getUrl('index', ['tab' => 'overdue']), $items['invoices_overdue']['url']);
         $this->assertSame(ActionItems::DANGER, $items['invoices_overdue']['level']);
 
-        $this->assertSame(1, $items['projects_over_budget']['count']);
-        $this->assertSame(ProjectResource::getUrl('index', ['tab' => 'over_budget']), $items['projects_over_budget']['url']);
+        $this->assertSame(1, $items['tasks_over_budget']['count']);
+        $this->assertSame(TaskResource::getUrl('index', ['tab' => 'over_budget']), $items['tasks_over_budget']['url']);
 
         // Đề nghị chi 30.000.000 đang chờ Giám đốc duyệt.
         $this->assertSame(1, $items['expenses_awaiting_me']['count']);
@@ -160,7 +161,7 @@ class DashboardTest extends TestCase
 
         Livewire::actingAs($director)
             ->test(PendingActions::class)
-            ->assertSeeInOrder(['hóa đơn quá hạn thanh toán', 'dự án vượt ngân sách', 'đề nghị chi đang chờ bạn duyệt']);
+            ->assertSeeInOrder(['hóa đơn quá hạn thanh toán', 'công việc vượt ngân sách', 'đề nghị chi đang chờ bạn duyệt']);
 
         // Nhân viên không có việc gì cần xử lý → trạng thái trống.
         Livewire::actingAs($this->createUserWithRole(SystemRole::Employee))
@@ -168,44 +169,46 @@ class DashboardTest extends TestCase
             ->assertSee('Không có việc nào cần xử lý');
     }
 
-    public function test_attention_table_lists_over_budget_low_margin_and_late_projects(): void
+    public function test_attention_table_lists_over_budget_and_late_tasks(): void
     {
-        $healthy = $this->makeProject(['status' => ProjectStatus::Active, 'end_date' => today()->addMonth()]);
-        $healthy->budgetItems()->create(['category' => 'other', 'description' => 'Sản xuất', 'planned_amount' => 50000000]);
+        $healthy = Task::factory()->create(['budget' => 50000000, 'due_date' => today()->addMonth()]);
         $this->payExpense($this->makeExpense($healthy, attributes: ['amount' => 5000000]));
 
         // Vượt ngân sách: ngân sách 1.000.000 mà đã chi 2.000.000.
-        $overBudget = $this->makeProject(['status' => ProjectStatus::Active, 'end_date' => today()->addMonth()]);
-        $overBudget->budgetItems()->create(['category' => 'other', 'description' => 'Dự phòng', 'planned_amount' => 1000000]);
+        $overBudget = Task::factory()->create(['budget' => 1000000, 'due_date' => today()->addMonth()]);
         $this->payExpense($this->makeExpense($overBudget, attributes: ['amount' => 2000000]));
 
-        // Biên lợi nhuận thấp: doanh thu 100 triệu, đã chi 85 triệu → 15%.
-        $lowMargin = $this->makeProject(['status' => ProjectStatus::Active, 'end_date' => today()->addMonth()]);
-        $lowMargin->budgetItems()->create(['category' => 'other', 'description' => 'Sản xuất', 'planned_amount' => 200000000]);
-        $this->payExpense($this->makeExpense($lowMargin, attributes: ['amount' => 85000000]));
+        // Sắp vượt: đã chi 85% ngân sách.
+        $nearBudget = Task::factory()->create(['budget' => 10000000, 'due_date' => today()->addMonth()]);
+        $this->payExpense($this->makeExpense($nearBudget, attributes: ['amount' => 8500000]));
 
-        $late = $this->makeProject(['status' => ProjectStatus::Active, 'end_date' => today()->subDays(3)]);
+        $late = Task::factory()->create(['due_date' => today()->subDays(3)]);
 
-        // Dự án đã hoàn thành không còn cần chú ý dù trễ hạn.
-        $done = $this->makeProject(['status' => ProjectStatus::Completed, 'end_date' => today()->subDays(3)]);
+        // Công việc đã hoàn thành không còn cần chú ý dù trễ hạn.
+        $done = Task::factory()->create(['status' => TaskStatus::Done, 'due_date' => today()->subDays(3)]);
 
-        $this->assertSame(['Vượt ngân sách'], AttentionProjects::reasons($overBudget->refresh(), true));
-        $this->assertSame(['Biên lợi nhuận thấp'], AttentionProjects::reasons($lowMargin->refresh(), true));
-        $this->assertSame(['Trễ hạn'], AttentionProjects::reasons($late->refresh(), true));
+        $this->assertSame(['Vượt ngân sách'], AttentionTasks::reasons($overBudget->refresh(), true));
+        $this->assertSame(['Sắp vượt ngân sách'], AttentionTasks::reasons($nearBudget->refresh(), true));
+        $this->assertSame(['Quá hạn'], AttentionTasks::reasons($late->refresh(), true));
+        $this->assertSame([], AttentionTasks::reasons($overBudget, false));
 
         Livewire::actingAs($this->approver(SystemRole::Director))
-            ->test(AttentionProjects::class)
-            ->assertCanSeeTableRecords([$overBudget, $lowMargin, $late])
+            ->test(AttentionTasks::class)
+            ->assertCanSeeTableRecords([$overBudget, $nearBudget, $late])
             ->assertCanNotSeeTableRecords([$healthy, $done])
             ->assertTableColumnVisible('actual_cost');
 
-        // Người không xem chi phí nội bộ chỉ thấy dự án trễ hạn, không có cột tiền.
-        Livewire::actingAs($this->approver(SystemRole::Sales))
-            ->test(AttentionProjects::class)
+        // Người không xem chi phí nội bộ chỉ thấy công việc của mình bị trễ hạn, không có cột tiền.
+        $employee = $this->approver(SystemRole::Employee);
+        $late->update(['assignee_id' => $employee->getKey()]);
+        $overBudget->update(['assignee_id' => $employee->getKey()]);
+
+        Livewire::actingAs($employee)
+            ->test(AttentionTasks::class)
             ->assertCanSeeTableRecords([$late])
-            ->assertCanNotSeeTableRecords([$overBudget, $lowMargin, $healthy])
+            ->assertCanNotSeeTableRecords([$overBudget, $nearBudget, $healthy])
             ->assertTableColumnHidden('actual_cost')
-            ->assertTableColumnHidden('profit_margin');
+            ->assertTableColumnHidden('budget');
     }
 
     public function test_recent_activity_is_limited_to_own_actions_without_audit_permission(): void
@@ -234,13 +237,46 @@ class DashboardTest extends TestCase
             ->assertSee('Xem toàn bộ nhật ký');
     }
 
+    /**
+     * Người từng lập hợp đồng, báo giá nhưng nay không còn quyền xem thì không
+     * thấy lại chúng trong "Hoạt động gần đây" của mình.
+     */
+    public function test_recent_activity_hides_contracts_and_quotations_from_people_who_lost_access(): void
+    {
+        $sales = $this->approver(SystemRole::Sales);
+
+        // Những bản ghi do chính người này tạo từ trước.
+        $this->actingAs($sales);
+        $customer = Customer::factory()->create();
+        $contract = $this->makeActiveContract(['title' => 'Hợp đồng bí mật', 'customer_id' => $customer->getKey()]);
+        $invoice = $this->makeInvoice(['customer_id' => $customer->getKey()]);
+
+        Livewire::actingAs($sales)
+            ->test(RecentActivity::class)
+            ->assertSee('Khách hàng '.$customer->code)
+            ->assertDontSee($contract->code)
+            ->assertDontSee($invoice->code)
+            ->assertDontSee('Hợp đồng')
+            ->assertDontSee('Hóa đơn');
+
+        // Kế toán (xem được hợp đồng, hóa đơn) vẫn thấy thao tác của chính mình trên chúng.
+        $accountant = $this->approver(SystemRole::Accountant);
+        $this->actingAs($accountant);
+        $own = $this->makeActiveContract();
+
+        Livewire::actingAs($accountant)
+            ->test(RecentActivity::class)
+            ->assertSee($own->code)
+            ->assertDontSee($contract->code);
+    }
+
     public function test_charts_render_with_and_without_data(): void
     {
         $director = $this->approver(SystemRole::Director);
 
         $charts = [
             RevenueByMonth::class, ExpenseByMonth::class, ProfitByMonth::class, RevenueByServiceChart::class,
-            ExpenseVsBudget::class, ProjectProfitabilityChart::class, ReceivableAgingChart::class, ProjectStatusChart::class,
+            ContractProfitabilityChart::class, ReceivableAgingChart::class, TaskStatusChart::class,
         ];
 
         // Chưa có dữ liệu: mỗi biểu đồ hiện trạng thái trống, không lỗi.
@@ -262,18 +298,17 @@ class DashboardTest extends TestCase
 
     /**
      * Tháng này: doanh thu 40.000.000, chi phí 12.000.000. Tháng trước: doanh
-     * thu 20.000.000 (hóa đơn đã quá hạn). Một dự án vượt ngân sách, một đề
+     * thu 20.000.000 (hóa đơn đã quá hạn). Một công việc vượt ngân sách, một đề
      * nghị chi đang chờ Giám đốc duyệt, một thanh toán vừa nhận.
      */
     private function seedBusyCompany(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-        $project->budgetItems()->create(['category' => 'other', 'description' => 'Sản xuất', 'planned_amount' => 10000000]);
+        $job = $this->makeJob(['budget' => 10000000]);
 
-        $this->payExpense($this->makeExpense($project, attributes: ['amount' => 12000000, 'expense_date' => '2026-10-05']));
+        $this->payExpense($this->makeExpense($job, attributes: ['amount' => 12000000, 'expense_date' => '2026-10-05']));
 
         // Chờ Giám đốc duyệt (trên 20 triệu phải qua cấp Giám đốc).
-        $pending = $this->makeExpense($project, attributes: ['amount' => 30000000]);
+        $pending = $this->makeExpense($job, attributes: ['amount' => 30000000]);
         $workflow = $this->expenseWorkflow();
         $pending = $workflow->submit($pending, $pending->employee);
 

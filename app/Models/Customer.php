@@ -125,14 +125,6 @@ class Customer extends Model
     }
 
     /**
-     * @return HasMany<Project, $this>
-     */
-    public function projects(): HasMany
-    {
-        return $this->hasMany(Project::class);
-    }
-
-    /**
      * @return HasMany<Invoice, $this>
      */
     public function invoices(): HasMany

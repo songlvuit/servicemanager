@@ -22,7 +22,7 @@ use LogicException;
 use Spatie\Permission\Models\Role;
 use Tests\Concerns\BuildsExpenses;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 /**
@@ -32,7 +32,7 @@ class AuditLogTest extends TestCase
 {
     use BuildsExpenses;
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     private User $admin;
@@ -235,7 +235,7 @@ class AuditLogTest extends TestCase
         $this->actingAs($this->admin);
 
         $customer = Customer::factory()->create();
-        $project = $this->makeProject();
+        $job = $this->makeJob();
 
         $this->actingAs($this->createUserWithRole(SystemRole::Employee))
             ->get(AuditLogResource::getUrl('index'))
@@ -248,13 +248,13 @@ class AuditLogTest extends TestCase
             ->assertSee('Khách hàng '.$customer->code);
 
         $customerLog = $customer->audits()->sole();
-        $projectLog = $project->audits()->where('action', 'created')->sole();
+        $jobLog = $job->contract->audits()->where('action', 'created')->sole();
 
         Livewire::test(ListAuditLogs::class)
-            ->assertCanSeeTableRecords([$customerLog, $projectLog])
+            ->assertCanSeeTableRecords([$customerLog, $jobLog])
             ->filterTable('auditable_type', [$customer->getMorphClass()])
             ->assertCanSeeTableRecords([$customerLog])
-            ->assertCanNotSeeTableRecords([$projectLog]);
+            ->assertCanNotSeeTableRecords([$jobLog]);
     }
 
     public function test_record_pages_show_their_own_activity(): void

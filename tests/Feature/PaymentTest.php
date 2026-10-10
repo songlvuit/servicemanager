@@ -15,13 +15,13 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 class PaymentTest extends TestCase
 {
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -109,7 +109,7 @@ class PaymentTest extends TestCase
 
         app(PaymentService::class)->record(
             $this->issuedInvoice(),
-            $this->createUserWithRole(SystemRole::Sales),
+            $this->createUserWithRole(SystemRole::ProjectManager),
             1000,
             PaymentMethod::Cash,
         );
@@ -152,10 +152,10 @@ class PaymentTest extends TestCase
         $this->assertFalse($this->accountant()->can('delete', $payment));
     }
 
-    public function test_project_shows_what_was_invoiced_and_collected(): void
+    public function test_contract_shows_what_was_invoiced_and_collected(): void
     {
-        $project = $this->makeProject();
-        $attributes = ['project_id' => $project->getKey(), 'contract_id' => $project->contract_id, 'customer_id' => $project->customer_id];
+        $contract = $this->makeActiveContract();
+        $attributes = ['contract_id' => $contract->getKey(), 'customer_id' => $contract->customer_id];
 
         $first = $this->issuedInvoice($attributes);                       // 11.000.000
         $second = $this->issuedInvoice([...$attributes, 'subtotal' => 20000000]); // 22.000.000
@@ -164,11 +164,11 @@ class PaymentTest extends TestCase
         $this->pay($first, 11000000);
         $this->pay($second, 2000000);
 
-        $project->refresh();
+        $contract->refresh();
 
-        $this->assertSame('33000000.00', $project->invoiced_amount);
-        $this->assertSame('13000000.00', $project->collected_amount);
-        $this->assertSame('20000000.00', $project->outstandingAmount());
+        $this->assertSame('33000000.00', $contract->invoiced_amount);
+        $this->assertSame('13000000.00', $contract->collected_amount);
+        $this->assertSame('20000000.00', $contract->outstandingAmount());
     }
 
     public function test_accountant_records_a_payment_from_the_invoice_page(): void
@@ -221,8 +221,8 @@ class PaymentTest extends TestCase
 
         $this->assertSame('3500000.00', $invoice->refresh()->paid_amount);
 
-        // Sales xem được danh sách nhưng không có nút ghi nhận.
-        $this->actingAs($this->createUserWithRole(SystemRole::Sales));
+        // Người chỉ có quyền xem thì thấy danh sách nhưng không có nút ghi nhận.
+        $this->actingAs($this->createUserWithPermissions(['payments.view', 'invoices.view']));
 
         Livewire::test(ListPayments::class)->assertActionHidden('recordPayment');
 

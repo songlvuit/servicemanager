@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Expenses\Schemas;
 
 use App\Enums\ExpenseStatus;
-use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Support\ApprovalTimeline;
 use App\Filament\Support\Columns;
 use App\Filament\Support\TaskField;
@@ -41,12 +40,6 @@ class ExpenseInfolist
                             ->badge(),
                         TextEntry::make('employee.name')
                             ->label('Người đề nghị'),
-                        TextEntry::make('project.name')
-                            ->label('Dự án')
-                            ->placeholder('Không gắn dự án')
-                            ->url(fn (Expense $record): ?string => $record->project !== null && ProjectResource::canView($record->project)
-                                ? ProjectResource::getUrl('view', ['record' => $record->project])
-                                : null),
                         TaskField::entry(),
                         TextEntry::make('category')
                             ->label('Nhóm chi phí')

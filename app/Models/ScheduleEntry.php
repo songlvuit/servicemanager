@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
- * Một lịch làm việc: việc gì, lúc nào, ở đâu, ai tham gia, cho dự án nào.
+ * Một lịch làm việc: việc gì, lúc nào, ở đâu, ai tham gia, cho khách hàng nào.
  * Mỗi lịch (trừ lịch nghỉ) gắn với một công việc. Lịch có `from_task` là lịch
  * của chính công việc đó: nó được tạo và cập nhật theo công việc (TaskSchedule),
  * không sửa trực tiếp trên trang Lịch.
@@ -43,7 +43,6 @@ class ScheduleEntry extends Model
     protected $fillable = [
         'title',
         'schedule_type_id',
-        'project_id',
         'customer_id',
         'starts_at',
         'ends_at',
@@ -88,11 +87,6 @@ class ScheduleEntry extends Model
             if ($entry->is_all_day && $entry->starts_at !== null) {
                 $entry->starts_at = $entry->starts_at->copy()->startOfDay();
                 $entry->ends_at = ($entry->ends_at ?? $entry->starts_at)->copy()->endOfDay()->startOfSecond();
-            }
-
-            // Chọn dự án thì khách hàng luôn là khách hàng của dự án.
-            if ($entry->project_id !== null && ($entry->isDirty('project_id') || $entry->customer_id === null)) {
-                $entry->customer_id = Project::query()->withTrashed()->find($entry->project_id)?->customer_id ?? $entry->customer_id;
             }
         });
     }
@@ -220,14 +214,6 @@ class ScheduleEntry extends Model
     public function type(): BelongsTo
     {
         return $this->belongsTo(ScheduleType::class, 'schedule_type_id');
-    }
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
     }
 
     /**

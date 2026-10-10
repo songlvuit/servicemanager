@@ -23,12 +23,12 @@ use Filament\Forms\Components\Repeater;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 class PurchasingTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     private User $procurement;
@@ -124,7 +124,7 @@ class PurchasingTest extends TestCase
         $orders = app(PurchaseOrderWorkflow::class);
 
         $order = PurchaseOrder::factory()->create([
-            'project_id' => $request->project_id,
+            'task_id' => $request->task_id,
             'purchase_request_id' => $request->getKey(),
         ]);
         $order->items()->create(['description' => 'Micro', 'quantity' => 2, 'unit_price' => 3000000, 'tax_rate' => 10]);
@@ -156,7 +156,7 @@ class PurchasingTest extends TestCase
         $request = $this->approvedRequest();
         $orders = app(PurchaseOrderWorkflow::class);
 
-        $order = PurchaseOrder::factory()->create(['project_id' => $request->project_id, 'purchase_request_id' => $request->getKey()]);
+        $order = PurchaseOrder::factory()->create(['task_id' => $request->task_id, 'purchase_request_id' => $request->getKey()]);
         $order->items()->create(['description' => 'Micro', 'quantity' => 1, 'unit_price' => 5000000]);
 
         $order = $orders->order($orders->recalculate($order), $this->procurement);
@@ -166,7 +166,7 @@ class PurchasingTest extends TestCase
         $this->assertSame(PurchaseRequestStatus::Approved, $request->refresh()->status);
 
         // Đơn đã nhận hàng thì không huỷ được.
-        $second = PurchaseOrder::factory()->create(['project_id' => $request->project_id, 'purchase_request_id' => $request->getKey()]);
+        $second = PurchaseOrder::factory()->create(['task_id' => $request->task_id, 'purchase_request_id' => $request->getKey()]);
         $second->items()->create(['description' => 'Micro', 'quantity' => 1, 'unit_price' => 5000000]);
         $second = $orders->receive($orders->order($orders->recalculate($second), $this->procurement), $this->procurement);
 
@@ -220,7 +220,7 @@ class PurchasingTest extends TestCase
             ->test(CreatePurchaseOrder::class)
             ->assertSchemaStateSet([
                 'purchase_request_id' => $request->getKey(),
-                'project_id' => $request->project_id,
+                'task_id' => $request->task_id,
                 'supplier_id' => $supplier->getKey(),
             ])
             ->fillForm([
@@ -279,7 +279,7 @@ class PurchasingTest extends TestCase
     private function makeRequest(array $attributes = []): PurchaseRequest
     {
         return PurchaseRequest::factory()->create([
-            'project_id' => $this->makeProject()->getKey(),
+            'task_id' => $this->makeJob()->getKey(),
             'requester_id' => $this->procurement->getKey(),
             ...$attributes,
         ])->refresh();

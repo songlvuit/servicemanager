@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Acceptance;
-use App\Models\Project;
+use App\Models\Contract;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,7 +19,7 @@ class AcceptanceFactory extends Factory
     public function definition(): array
     {
         return [
-            'project_id' => Project::factory(),
+            'contract_id' => Contract::factory()->active(),
             'description' => 'Nghiệm thu '.fake()->unique()->numberBetween(1, 99999),
             'acceptance_date' => today(),
             'amount' => 50000000,

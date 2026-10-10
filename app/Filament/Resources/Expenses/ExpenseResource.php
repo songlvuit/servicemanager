@@ -35,7 +35,7 @@ class ExpenseResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Dự án';
+    protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static ?string $navigationLabel = 'Chi phí';
 
@@ -81,12 +81,12 @@ class ExpenseResource extends Resource
     }
 
     /**
-     * Người không có quyền "Xem tất cả" chỉ thấy đề nghị chi của mình và của dự án mình quản lý.
+     * Người không có quyền "Xem tất cả" chỉ thấy đề nghị chi của mình và của công việc mình phụ trách.
      */
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['project', 'task', 'employee'])
+            ->with(['task', 'employee'])
             ->visibleTo(auth()->user())
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
@@ -137,7 +137,7 @@ class ExpenseResource extends Resource
      */
     public static function getGloballySearchableAttributes(): array
     {
-        return ['code', 'description', 'project.name'];
+        return ['code', 'description', 'task.name'];
     }
 
     public static function getGlobalSearchResultTitle(Model $record): string|Htmlable
@@ -151,7 +151,7 @@ class ExpenseResource extends Resource
     public static function getGlobalSearchResultDetails(Model $record): array
     {
         return [
-            'Dự án' => (string) $record->project?->name,
+            'Công việc' => (string) ($record->task?->name ?? 'Chi phí chung'),
             'Số tiền' => Money::format($record->total_amount),
         ];
     }

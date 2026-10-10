@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ProjectStatus;
 use App\Enums\ScheduleStatus;
 use App\Enums\SystemRole;
 use App\Exceptions\WorkflowException;
@@ -19,7 +18,7 @@ use App\Services\Scheduling\ScheduleTimesheets;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsSchedules;
 use Tests\TestCase;
 
@@ -29,7 +28,7 @@ use Tests\TestCase;
  */
 class ScheduleTest extends TestCase
 {
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsSchedules;
     use RefreshDatabase;
 
@@ -77,14 +76,6 @@ class ScheduleTest extends TestCase
         $this->assertSame('Cả ngày', $allDay->timeLabel());
         $this->assertSame('12/10 – 14/10 (cả ngày)', $trip->timeLabel());
         $this->assertTrue($trip->isMultiDay());
-    }
-
-    public function test_choosing_a_project_sets_the_customer(): void
-    {
-        $project = $this->makeProject();
-        $entry = $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', attributes: ['project_id' => $project->getKey()]);
-
-        $this->assertSame($project->customer_id, $entry->customer_id);
     }
 
     public function test_overlapping_entries_for_the_same_person_are_conflicts(): void
@@ -353,34 +344,18 @@ class ScheduleTest extends TestCase
         $this->assertSame([], $calendar->agenda($this->pm, Carbon::parse('2026-10-07'), 30));
     }
 
-    public function test_project_deadlines_show_as_milestones_for_people_who_can_see_the_project(): void
-    {
-        $project = $this->makeProject(['status' => ProjectStatus::Active, 'name' => 'TVC mùa thu', 'end_date' => '2026-10-09', 'project_manager_id' => $this->pm->getKey()]);
-        $this->makeProject(['status' => ProjectStatus::Completed, 'end_date' => '2026-10-09']);
-        $calendar = app(CalendarQuery::class);
-
-        $week = $calendar->week(Carbon::parse('2026-10-07'), viewer: $this->pm);
-
-        $this->assertSame(['Hạn dự án: TVC mùa thu'], $week['days'][4]['milestones']);
-
-        // Nhân viên không tham gia dự án thì không thấy mốc của nó.
-        $this->assertSame([], $calendar->week(Carbon::parse('2026-10-07'), viewer: $this->quay)['days'][4]['milestones']);
-        $this->assertNotNull($project);
-    }
-
     public function test_timesheets_are_logged_once_from_a_finished_schedule(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
         $service = app(ScheduleTimesheets::class);
 
         // Hôm qua, 08:00 – 12:30: gợi ý 4,5 giờ.
-        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:30', [$this->quay, $this->sang], ['project_id' => $project->getKey(), 'title' => 'Quay TVC']);
+        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:30', [$this->quay, $this->sang], ['title' => 'Quay TVC']);
 
         $this->assertSame('4.5', $service->suggestedHours($entry));
         $this->assertSame(2, $service->log($entry, $this->pm, '4.5'));
 
         // Chi phí nhân sự: 4,5 × 150.000 + 4,5 × 100.000.
-        $this->assertSame('1125000.00', $project->refresh()->labor_cost);
+        $this->assertEquals(1125000, Timesheet::query()->sum('cost'));
         $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
         $this->assertNotNull($entry->timesheets_logged_at);
         $this->assertSame('Theo lịch: Quay TVC', Timesheet::query()->first()->description);
@@ -394,37 +369,34 @@ class ScheduleTest extends TestCase
         $this->assertSame(3, Timesheet::query()->count());
 
         // Lịch nhiều ngày: mỗi ngày đã qua một dòng cho mỗi người, 8 giờ gợi ý.
-        $trip = $this->makeEntry('2026-10-05 06:00', '2026-10-06 18:00', [$this->quay], ['project_id' => $project->getKey()]);
+        $trip = $this->makeEntry('2026-10-05 06:00', '2026-10-06 18:00', [$this->quay]);
 
         $this->assertSame('8', $service->suggestedHours($trip));
         $this->assertSame(2, $service->log($trip, $this->pm, 8));
         $this->assertSame(['2026-10-05', '2026-10-06'], $trip->timesheets()->orderBy('work_date')->get()->map(fn (Timesheet $t): string => $t->work_date->toDateString())->all());
     }
 
-    public function test_timesheets_are_logged_for_a_schedule_without_a_project_as_overhead(): void
+    public function test_timesheets_of_a_schedule_without_a_task_are_overhead(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
         $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay, $this->sang]);
 
         $this->assertSame(2, app(ScheduleTimesheets::class)->log($entry, $this->pm, 4));
 
         $timesheets = $entry->timesheets()->get();
 
-        $this->assertSame([null, null], $timesheets->pluck('project_id')->all());
-        // 4 giờ × 150.000 và 4 giờ × 100.000: vẫn là chi phí nhân sự, nhưng không vào dự án nào.
+        $this->assertSame([null, null], $timesheets->pluck('task_id')->all());
+        // 4 giờ × 150.000 và 4 giờ × 100.000: vẫn là chi phí nhân sự, nhưng không vào công việc nào.
         $this->assertEqualsCanonicalizing(['600000.00', '400000.00'], $timesheets->pluck('cost')->all());
-        $this->assertSame('0.00', $project->refresh()->labor_cost);
         $this->assertSame(ScheduleStatus::Done, $entry->refresh()->status);
     }
 
     public function test_timesheets_cannot_be_logged_too_early_or_for_leave_or_without_permission(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
         $service = app(ScheduleTimesheets::class);
 
-        $future = $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->quay], ['project_id' => $project->getKey()]);
+        $future = $this->makeEntry('2026-10-08 08:00', '2026-10-08 12:00', [$this->quay]);
         $leave = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay], ['schedule_type_id' => ScheduleType::leave()->getKey()]);
-        $past = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay], ['project_id' => $project->getKey()]);
+        $past = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay]);
 
         foreach ([[$future, 'Lịch chưa diễn ra nên chưa ghi giờ công được.'], [$leave, 'Lịch nghỉ / bận không ghi giờ công.']] as [$entry, $message]) {
             try {
@@ -443,8 +415,7 @@ class ScheduleTest extends TestCase
 
     public function test_a_schedule_with_timesheets_cannot_be_deleted(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay], ['project_id' => $project->getKey()]);
+        $entry = $this->makeEntry('2026-10-06 08:00', '2026-10-06 12:00', [$this->quay]);
 
         app(ScheduleTimesheets::class)->log($entry, $this->pm, 4);
 

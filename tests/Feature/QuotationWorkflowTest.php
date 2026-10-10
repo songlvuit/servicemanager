@@ -21,7 +21,7 @@ class QuotationWorkflowTest extends TestCase
     use BuildsQuotations;
     use RefreshDatabase;
 
-    private User $sales;
+    private User $author;
 
     private User $director;
 
@@ -31,7 +31,7 @@ class QuotationWorkflowTest extends TestCase
 
         $this->seedAccessControl();
 
-        $this->sales = $this->createUserWithRole(SystemRole::Sales);
+        $this->author = $this->createUserWithRole(SystemRole::Accountant);
         $this->director = $this->createUserWithRole(SystemRole::Director);
     }
 
@@ -40,12 +40,12 @@ class QuotationWorkflowTest extends TestCase
         $customer = Customer::factory()->lead()->create();
         $opportunity = Opportunity::factory()->create(['customer_id' => $customer->getKey()]);
 
-        $quotation = $this->makeQuotation(creator: $this->sales, attributes: [
+        $quotation = $this->makeQuotation(creator: $this->author, attributes: [
             'customer_id' => $customer->getKey(),
             'opportunity_id' => $opportunity->getKey(),
         ]);
 
-        $quotation = $this->workflow()->submit($quotation, $this->sales);
+        $quotation = $this->workflow()->submit($quotation, $this->author);
 
         $this->assertSame(QuotationStatus::PendingApproval, $quotation->status);
         $this->assertNotNull($quotation->submitted_at);
@@ -60,12 +60,12 @@ class QuotationWorkflowTest extends TestCase
         $this->assertNotNull($quotation->approved_at);
         $this->assertSame('Đồng ý.', $quotation->approval_note);
 
-        $quotation = $this->workflow()->markSent($quotation, $this->sales);
+        $quotation = $this->workflow()->markSent($quotation, $this->author);
 
         $this->assertSame(QuotationStatus::Sent, $quotation->status);
         $this->assertNotNull($quotation->sent_at);
 
-        $quotation = $this->workflow()->markAccepted($quotation, $this->sales);
+        $quotation = $this->workflow()->markAccepted($quotation, $this->author);
 
         $this->assertSame(QuotationStatus::Accepted, $quotation->status);
         $this->assertNotNull($quotation->accepted_at);
@@ -76,26 +76,26 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_quotation_without_items_cannot_be_submitted(): void
     {
-        $quotation = $this->makeQuotation([], $this->sales);
+        $quotation = $this->makeQuotation([], $this->author);
 
         $this->expectException(QuotationWorkflowException::class);
 
-        $this->workflow()->submit($quotation, $this->sales);
+        $this->workflow()->submit($quotation, $this->author);
     }
 
     public function test_sales_cannot_approve(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
 
         $this->expectException(AuthorizationException::class);
 
-        $this->workflow()->approve($quotation, $this->sales);
+        $this->workflow()->approve($quotation, $this->author);
     }
 
     public function test_users_without_permission_cannot_submit(): void
     {
         $employee = $this->createUserWithRole(SystemRole::Employee);
-        $quotation = $this->makeQuotation(creator: $this->sales);
+        $quotation = $this->makeQuotation(creator: $this->author);
 
         $this->expectException(AuthorizationException::class);
 
@@ -111,10 +111,10 @@ class QuotationWorkflowTest extends TestCase
         $teamLead = User::factory()->create();
         $teamLead->assignRole($teamLeadRole);
 
-        $normal = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $normal = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
         $discounted = $this->workflow()->submit(
-            $this->makeQuotation([['unit_price' => 10000000, 'discount' => 2500000]], $this->sales),
-            $this->sales,
+            $this->makeQuotation([['unit_price' => 10000000, 'discount' => 2500000]], $this->author),
+            $this->author,
         );
 
         $this->assertFalse($normal->requires_director_approval);
@@ -140,7 +140,7 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_rejection_requires_a_reason_and_allows_revision(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
 
         try {
             $this->workflow()->reject($quotation, $this->director, '   ');
@@ -155,7 +155,7 @@ class QuotationWorkflowTest extends TestCase
         $this->assertSame('Đơn giá chưa hợp lý.', $quotation->rejection_reason);
         $this->assertFalse($quotation->isEditable());
 
-        $quotation = $this->workflow()->revise($quotation, $this->sales);
+        $quotation = $this->workflow()->revise($quotation, $this->author);
 
         $this->assertSame(QuotationStatus::Draft, $quotation->status);
         $this->assertTrue($quotation->isEditable());
@@ -164,7 +164,7 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_items_are_locked_once_the_quotation_is_submitted(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
         $item = $quotation->items()->first();
 
         foreach ([
@@ -188,35 +188,35 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_invalid_transitions_are_refused(): void
     {
-        $draft = $this->makeQuotation(creator: $this->sales);
+        $draft = $this->makeQuotation(creator: $this->author);
 
         // Nháp không gửi khách được khi chưa duyệt.
         try {
-            $this->workflow()->markSent($draft, $this->sales);
+            $this->workflow()->markSent($draft, $this->author);
             $this->fail('Báo giá nháp không được chuyển thẳng sang Đã gửi khách.');
         } catch (QuotationWorkflowException) {
             $this->assertSame(QuotationStatus::Draft, $draft->fresh()->status);
         }
 
         // Đã duyệt thì không duyệt / từ chối lại được.
-        $approved = $this->workflow()->approve($this->workflow()->submit($draft, $this->sales), $this->director);
+        $approved = $this->workflow()->approve($this->workflow()->submit($draft, $this->author), $this->director);
 
         $this->assertFalse($this->director->can('approve', $approved));
 
         // Khách đã chấp nhận thì không huỷ được.
-        $accepted = $this->workflow()->markAccepted($this->workflow()->markSent($approved, $this->sales), $this->sales);
+        $accepted = $this->workflow()->markAccepted($this->workflow()->markSent($approved, $this->author), $this->author);
 
         $this->expectException(QuotationWorkflowException::class);
 
-        $this->workflow()->cancel($accepted, $this->sales);
+        $this->workflow()->cancel($accepted, $this->author);
     }
 
     public function test_customer_can_decline_a_sent_quotation(): void
     {
-        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->sales), $this->sales);
+        $quotation = $this->workflow()->submit($this->makeQuotation(creator: $this->author), $this->author);
         $quotation = $this->workflow()->approve($quotation, $this->director);
-        $quotation = $this->workflow()->markSent($quotation, $this->sales);
-        $quotation = $this->workflow()->markDeclined($quotation, $this->sales, 'Vượt ngân sách.');
+        $quotation = $this->workflow()->markSent($quotation, $this->author);
+        $quotation = $this->workflow()->markDeclined($quotation, $this->author, 'Vượt ngân sách.');
 
         $this->assertSame(QuotationStatus::Rejected, $quotation->status);
         $this->assertSame('Khách hàng từ chối: Vượt ngân sách.', $quotation->rejection_reason);
@@ -224,7 +224,7 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_draft_can_be_cancelled_with_a_reason(): void
     {
-        $quotation = $this->workflow()->cancel($this->makeQuotation(creator: $this->sales), $this->sales, 'Khách đổi kế hoạch.');
+        $quotation = $this->workflow()->cancel($this->makeQuotation(creator: $this->author), $this->author, 'Khách đổi kế hoạch.');
 
         $this->assertSame(QuotationStatus::Cancelled, $quotation->status);
         $this->assertSame('Huỷ: Khách đổi kế hoạch.', $quotation->rejection_reason);
@@ -233,19 +233,19 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_overdue_quotations_expire(): void
     {
-        $overdue = $this->makeQuotation(creator: $this->sales, attributes: [
+        $overdue = $this->makeQuotation(creator: $this->author, attributes: [
             'quotation_date' => today()->subDays(40),
             'valid_until' => today()->subDay(),
         ]);
-        $stillValid = $this->makeQuotation(creator: $this->sales, attributes: [
+        $stillValid = $this->makeQuotation(creator: $this->author, attributes: [
             'valid_until' => today(),
         ]);
-        $overdueDraft = $this->makeQuotation(creator: $this->sales, attributes: [
+        $overdueDraft = $this->makeQuotation(creator: $this->author, attributes: [
             'valid_until' => today()->subDay(),
         ]);
 
         foreach ([$overdue, $stillValid] as $quotation) {
-            $this->workflow()->approve($this->workflow()->submit($quotation, $this->sales), $this->director);
+            $this->workflow()->approve($this->workflow()->submit($quotation, $this->author), $this->director);
         }
 
         $this->assertSame(1, $this->workflow()->expireOverdue());
@@ -260,18 +260,18 @@ class QuotationWorkflowTest extends TestCase
 
     public function test_approvers_and_creator_are_notified(): void
     {
-        $quotation = $this->makeQuotation(creator: $this->sales);
+        $quotation = $this->makeQuotation(creator: $this->author);
 
-        $this->workflow()->submit($quotation, $this->sales);
+        $this->workflow()->submit($quotation, $this->author);
 
         // Giám đốc nhận thông báo "cần duyệt"; người gửi không tự nhận.
         $this->assertSame(1, $this->director->notifications()->count());
-        $this->assertSame(0, $this->sales->notifications()->count());
+        $this->assertSame(0, $this->author->notifications()->count());
         $this->assertSame('Báo giá cần duyệt', $this->director->notifications()->first()->data['title']);
 
         $this->workflow()->approve($quotation, $this->director);
 
-        $this->assertSame(1, $this->sales->notifications()->count());
-        $this->assertSame('Báo giá đã được duyệt', $this->sales->notifications()->first()->data['title']);
+        $this->assertSame(1, $this->author->notifications()->count());
+        $this->assertSame('Báo giá đã được duyệt', $this->author->notifications()->first()->data['title']);
     }
 }

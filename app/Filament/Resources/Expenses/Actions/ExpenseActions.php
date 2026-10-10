@@ -100,7 +100,7 @@ class ExpenseActions
             ->icon(Heroicon::OutlinedCreditCard)
             ->color('success')
             ->modalHeading(fn (Expense $record): string => "Thanh toán đề nghị chi {$record->code}?")
-            ->modalDescription(fn (Expense $record): string => 'Bạn có chắc chắn đã chi '.Money::format($record->total_amount).'? Khoản này sẽ được ghi vào chi phí thực tế của dự án.')
+            ->modalDescription(fn (Expense $record): string => 'Bạn có chắc chắn đã chi '.Money::format($record->total_amount).'? Khoản này sẽ được ghi vào chi phí thực tế của công việc.')
             ->schema([
                 Select::make('payment_method')
                     ->label('Hình thức thanh toán')

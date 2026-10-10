@@ -6,7 +6,6 @@ use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Support\Access;
 use App\Filament\Support\Columns;
 use App\Filament\Support\Filters;
-use App\Models\Timesheet;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\Summarizers\Sum;
@@ -15,12 +14,12 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 /**
- * Bảng giờ công, dùng chung cho màn hình Chấm công và tab Chấm công của dự án.
+ * Bảng giờ công, dùng chung cho màn hình Chấm công và tab Chấm công của công việc.
  * Cột chi phí chỉ hiện với người có quyền xem chi phí nội bộ.
  */
 class TimesheetsTable
 {
-    public static function configure(Table $table, bool $withProject = true): Table
+    public static function configure(Table $table, bool $withTask = true): Table
     {
         $filters = [
             SelectFilter::make('user_id')
@@ -31,16 +30,8 @@ class TimesheetsTable
             Filters::dateRange('work_date', 'Ngày làm việc'),
         ];
 
-        if ($withProject) {
-            array_unshift(
-                $filters,
-                SelectFilter::make('project_id')
-                    ->label('Dự án')
-                    ->relationship('project', 'name')
-                    ->searchable()
-                    ->preload(),
-                Filters::withoutProject(),
-            );
+        if ($withTask) {
+            array_unshift($filters, Filters::withoutTask());
         }
 
         return $table
@@ -52,18 +43,12 @@ class TimesheetsTable
                 TextColumn::make('user.name')
                     ->label('Nhân viên')
                     ->searchable(),
-                TextColumn::make('project.name')
-                    ->label('Dự án')
-                    // Không dùng placeholder: dòng không gắn dự án vẫn cần hiện tên công việc bên dưới.
-                    ->getStateUsing(fn (Timesheet $record): string => $record->project?->name ?? 'Không gắn dự án')
-                    ->description(fn (Timesheet $record): ?string => $record->task?->name)
-                    ->wrap()
-                    ->visible($withProject),
                 TextColumn::make('task.name')
                     ->label('Công việc')
-                    ->placeholder('—')
+                    ->placeholder('Chi phí chung')
                     ->wrap()
-                    ->visible(! $withProject),
+                    ->searchable()
+                    ->visible($withTask),
                 TextColumn::make('description')
                     ->label('Nội dung')
                     ->placeholder('—')
@@ -85,6 +70,6 @@ class TimesheetsTable
             ])
             ->defaultSort('work_date', 'desc')
             ->emptyStateHeading('Chưa có giờ công nào.')
-            ->emptyStateDescription('Ghi nhận thời gian làm việc cho dự án; chi phí nhân sự = số giờ × đơn giá giờ công.');
+            ->emptyStateDescription('Ghi nhận thời gian làm việc cho công việc; chi phí nhân sự = số giờ × đơn giá giờ công.');
     }
 }

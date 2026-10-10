@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\ProjectStatus;
 use App\Enums\SystemRole;
 use App\Filament\Pages\Notifications;
 use App\Models\User;
@@ -12,7 +11,7 @@ use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\TestCase;
 
 /**
@@ -21,7 +20,7 @@ use Tests\TestCase;
 class ReminderTest extends TestCase
 {
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use RefreshDatabase;
 
     private User $director;
@@ -38,10 +37,10 @@ class ReminderTest extends TestCase
 
     public function test_each_event_is_reminded_exactly_once(): void
     {
-        $sales = $this->createUserWithRole(SystemRole::Sales);
+        $author = $this->createUserWithPermissions(['contracts.view', 'contracts.create']);
 
         // Hợp đồng hết hạn sau 10 ngày (trong ngưỡng 30 ngày) và một hợp đồng còn xa.
-        $expiring = $this->makeActiveContract(['end_date' => today()->addDays(10), 'created_by' => $sales->getKey()]);
+        $expiring = $this->makeActiveContract(['end_date' => today()->addDays(10), 'created_by' => $author->getKey()]);
         $this->makeActiveContract(['end_date' => today()->addDays(90)]);
 
         // Hóa đơn tới hạn sau 3 ngày, hóa đơn quá hạn 5 ngày, hóa đơn còn xa hạn.
@@ -49,25 +48,19 @@ class ReminderTest extends TestCase
         $overdue = $this->issuedInvoice(['invoice_date' => today()->subDays(35), 'due_date' => today()->subDays(5)]);
         $this->issuedInvoice(['due_date' => today()->addDays(25)]);
 
-        // Dự án tới hạn sau 2 ngày; dự án đã hoàn thành thì không nhắc.
-        $pm = $this->createUserWithRole(SystemRole::ProjectManager);
-        $closing = $this->makeProject(['status' => ProjectStatus::Active, 'end_date' => today()->addDays(2), 'project_manager_id' => $pm->getKey()]);
-        $this->makeProject(['status' => ProjectStatus::Completed, 'end_date' => today()->addDays(2)]);
-
         $this->assertSame(
-            ['contracts' => 1, 'invoices_due' => 1, 'invoices_overdue' => 1, 'projects' => 1, 'schedules' => 0],
+            ['contracts' => 1, 'invoices_due' => 1, 'invoices_overdue' => 1, 'schedules' => 0],
             app(ReminderService::class)->send(),
         );
 
         $titles = fn (User $user): array => $user->notifications()->get()->map(fn ($n) => $n->data['title'])->sort()->values()->all();
 
-        // Giám đốc: hợp đồng, hóa đơn quá hạn, dự án. Kế toán: hai hóa đơn. Sales: hợp đồng mình lập. PM: dự án mình quản lý.
-        $this->assertSame(['Dự án sắp tới hạn', 'Hóa đơn quá hạn thanh toán', 'Hợp đồng sắp hết hạn'], $titles($this->director));
+        // Giám đốc: hợp đồng, hóa đơn quá hạn. Kế toán: hai hóa đơn. Người lập hợp đồng: hợp đồng của mình.
+        $this->assertSame(['Hóa đơn quá hạn thanh toán', 'Hợp đồng sắp hết hạn'], $titles($this->director));
         $this->assertSame(['Hóa đơn quá hạn thanh toán', 'Hóa đơn sắp tới hạn thanh toán'], $titles($this->accountant()));
-        $this->assertSame(['Hợp đồng sắp hết hạn'], $titles($sales));
-        $this->assertSame(['Dự án sắp tới hạn'], $titles($pm));
+        $this->assertSame(['Hợp đồng sắp hết hạn'], $titles($author));
 
-        $contractNotice = $sales->notifications()->first();
+        $contractNotice = $author->notifications()->first();
 
         $this->assertStringContainsString($expiring->code, $contractNotice->data['body']);
         $this->assertStringContainsString('còn 10 ngày', $contractNotice->data['body']);
@@ -83,7 +76,7 @@ class ReminderTest extends TestCase
         $this->travel(1)->days();
 
         $this->assertSame(
-            ['contracts' => 0, 'invoices_due' => 0, 'invoices_overdue' => 0, 'projects' => 0, 'schedules' => 0],
+            ['contracts' => 0, 'invoices_due' => 0, 'invoices_overdue' => 0, 'schedules' => 0],
             app(ReminderService::class)->send(),
         );
 
@@ -98,8 +91,23 @@ class ReminderTest extends TestCase
         $this->pay($late, 11000000);
 
         $this->assertSame(0, app(ReminderService::class)->invoicesOverdue());
+    }
 
-        $this->assertSame(0, $closing->refresh()->progress);
+    /**
+     * Người lập hợp đồng / hóa đơn nay không còn quyền xem thì không được nhắc
+     * (thông báo có mã, tên khách hàng và số tiền).
+     */
+    public function test_creators_who_lost_access_are_not_reminded(): void
+    {
+        $sales = $this->createUserWithRole(SystemRole::Sales);
+
+        $this->makeActiveContract(['end_date' => today()->addDays(10), 'created_by' => $sales->getKey()]);
+        $this->issuedInvoice(['invoice_date' => today()->subDays(35), 'due_date' => today()->subDays(5), 'created_by' => $sales->getKey()]);
+
+        app(ReminderService::class)->send();
+
+        $this->assertSame(0, $sales->notifications()->count());
+        $this->assertSame(2, $this->director->notifications()->count());
     }
 
     public function test_reminder_command_reports_what_it_sent(): void
@@ -173,11 +181,11 @@ class ReminderTest extends TestCase
         // Đường dẫn ra ngoài hệ thống không được dùng làm nút "Mở".
         $external = new DatabaseNotification(['data' => ['actions' => [['url' => 'https://evil.example/phish']]]]);
         $protocolRelative = new DatabaseNotification(['data' => ['actions' => [['url' => '//evil.example']]]]);
-        $relative = new DatabaseNotification(['data' => ['actions' => [['url' => '/admin/projects/1']]]]);
+        $relative = new DatabaseNotification(['data' => ['actions' => [['url' => '/admin/tasks/1']]]]);
 
         $this->assertNull(Notifications::targetUrl($external));
         $this->assertNull(Notifications::targetUrl($protocolRelative));
-        $this->assertSame('/admin/projects/1', Notifications::targetUrl($relative));
+        $this->assertSame('/admin/tasks/1', Notifications::targetUrl($relative));
     }
 
     public function test_error_pages_are_in_vietnamese_without_technical_details(): void

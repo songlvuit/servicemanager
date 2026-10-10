@@ -105,7 +105,7 @@ enum ExpenseStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * Đã được duyệt xong: tính vào chi phí cam kết của dự án.
+     * Đã được duyệt xong: tính vào chi phí cam kết của công việc.
      */
     public function isCommitted(): bool
     {
@@ -113,7 +113,7 @@ enum ExpenseStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * Đã chi tiền: tính vào chi phí thực tế của dự án.
+     * Đã chi tiền: tính vào chi phí thực tế của công việc.
      */
     public function isActual(): bool
     {

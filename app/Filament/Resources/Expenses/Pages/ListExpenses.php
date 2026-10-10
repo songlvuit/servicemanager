@@ -21,8 +21,7 @@ class ListExpenses extends ListRecords
             TableExport::make('expenses.export', 'de-nghi-chi', 'Danh sách đề nghị chi', fn (): array => [
                 'Mã' => 'code',
                 'Nội dung' => 'description',
-                'Mã dự án' => 'project.code',
-                'Dự án' => 'project.name',
+                'Công việc' => 'task.name',
                 'Người đề nghị' => 'employee.name',
                 'Nhóm chi phí' => 'category',
                 'Nhà cung cấp' => 'vendor.name',

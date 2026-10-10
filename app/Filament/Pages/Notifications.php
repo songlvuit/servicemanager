@@ -138,7 +138,7 @@ class Notifications extends Page implements HasTable
             ->paginated([10, 25, 50])
             ->emptyStateIcon(Heroicon::OutlinedBellSlash)
             ->emptyStateHeading('Chưa có thông báo nào.')
-            ->emptyStateDescription('Chứng từ cần bạn duyệt, hóa đơn tới hạn, dự án vượt ngân sách… sẽ được báo tại đây.');
+            ->emptyStateDescription('Chứng từ cần bạn duyệt, hóa đơn tới hạn, công việc vượt ngân sách… sẽ được báo tại đây.');
     }
 
     /**

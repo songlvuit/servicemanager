@@ -14,7 +14,7 @@ use Illuminate\Support\Collection;
 class IcsFeed
 {
     /**
-     * @param  Collection<int, ScheduleEntry>  $entries  Đã nạp type, crew, project, customer.
+     * @param  Collection<int, ScheduleEntry>  $entries  Đã nạp type, crew, customer.
      */
     public function render(Collection $entries, string $calendarName): string
     {
@@ -75,7 +75,6 @@ class IcsFeed
         return implode("\n", array_filter([
             filled($entry->crewLabel()) ? 'Ê-kíp: '.$entry->crewLabel() : null,
             $entry->customer ? 'Khách hàng: '.$entry->customer->name : null,
-            $entry->project ? 'Dự án: '.$entry->project->name : null,
             filled($entry->equipment) ? 'Thiết bị: '.$entry->equipment : null,
             filled($entry->notes) ? 'Ghi chú: '.$entry->notes : null,
         ]));

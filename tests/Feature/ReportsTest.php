@@ -3,16 +3,16 @@
 namespace Tests\Feature;
 
 use App\Enums\MarginBand;
-use App\Enums\ProjectStatus;
 use App\Enums\SystemRole;
+use App\Enums\TaskStatus;
 use App\Filament\Pages\Reports\CostReport;
 use App\Filament\Pages\Reports\ProfitReport;
 use App\Filament\Pages\Reports\RevenueReport;
 use App\Filament\Resources\Customers\Pages\ListCustomers;
-use App\Filament\Resources\Invoices\Pages\ListInvoices;
-use App\Filament\Resources\Projects\Pages\ListProjects;
+use App\Filament\Resources\Tasks\Pages\ManageTasks;
 use App\Filament\Support\TableExport;
 use App\Models\AuditLog;
+use App\Models\Contract;
 use App\Models\CostLine;
 use App\Models\Customer;
 use App\Models\Service;
@@ -22,7 +22,7 @@ use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\Concerns\BuildsExpenses;
 use Tests\Concerns\BuildsInvoices;
-use Tests\Concerns\BuildsProjects;
+use Tests\Concerns\BuildsJobs;
 use Tests\Concerns\BuildsQuotations;
 use Tests\TestCase;
 
@@ -33,7 +33,7 @@ class ReportsTest extends TestCase
 {
     use BuildsExpenses;
     use BuildsInvoices;
-    use BuildsProjects;
+    use BuildsJobs;
     use BuildsQuotations;
     use RefreshDatabase;
 
@@ -51,7 +51,7 @@ class ReportsTest extends TestCase
             $this->actingAs($this->approver(SystemRole::Accountant))->get($page::getUrl())->assertOk();
             $this->actingAs($this->approver(SystemRole::Director))->get($page::getUrl())->assertOk();
 
-            // Kinh doanh và quản lý dự án không xem báo cáo tài chính toàn công ty.
+            // Kinh doanh và quản lý công việc không xem báo cáo tài chính toàn công ty.
             $this->actingAs($this->approver(SystemRole::Sales))->get($page::getUrl())->assertForbidden();
             $this->actingAs($this->approver(SystemRole::ProjectManager))->get($page::getUrl())->assertForbidden();
         }
@@ -59,34 +59,41 @@ class ReportsTest extends TestCase
 
     public function test_profit_report_shows_margin_bands_and_filters_by_them(): void
     {
-        // Doanh thu mỗi dự án 100.000.000; chi 60 / 75 / 85 / 95 triệu → biên 40 / 25 / 15 / 5%.
-        $projects = [];
+        // Giá trị mỗi hợp đồng 100.000.000; công việc của nó chi 60 / 75 / 85 / 95 triệu → biên 40 / 25 / 15 / 5%.
+        $contracts = [];
 
         foreach (['good' => 60, 'normal' => 75, 'warning' => 85, 'danger' => 95] as $band => $costInMillions) {
-            $project = $this->makeProject(['status' => ProjectStatus::Active]);
-            $this->payExpense($this->makeExpense($project, attributes: ['amount' => $costInMillions * 1000000]));
+            $job = $this->makeJob();
+            $this->payExpense($this->makeExpense($job, attributes: ['amount' => $costInMillions * 1000000]));
 
-            $projects[$band] = $project->refresh();
+            $contracts[$band] = $job->contract->refresh();
 
-            $this->assertSame(MarginBand::from($band), MarginBand::for($project->profit_margin));
+            $this->assertSame(MarginBand::from($band), ProfitReport::band($contracts[$band]));
         }
 
-        $this->assertSame('40.00', $projects['good']->profit_margin);
-        $this->assertSame('5000000.00', $projects['danger']->actual_profit);
+        // Hợp đồng chưa phát sinh chi phí thì chưa đánh giá; hợp đồng nháp không nằm trong báo cáo mặc định.
+        $untouched = $this->makeActiveContract();
+        $draft = Contract::factory()->create();
+
+        $this->assertNull(ProfitReport::band($untouched));
+
+        $this->assertSame('40.00', $contracts['good']->profit_margin);
+        $this->assertSame('5000000.00', $contracts['danger']->actual_profit);
 
         $this->actingAs($this->approver(SystemRole::Accountant));
 
         Livewire::test(ProfitReport::class)
-            ->assertCanSeeTableRecords(array_values($projects))
-            // Biên lợi nhuận chung = Σ lợi nhuận / Σ doanh thu = 85 / 400.
-            ->assertSee('21,25%')
+            ->assertCanSeeTableRecords([...array_values($contracts), $untouched])
+            ->assertCanNotSeeTableRecords([$draft])
+            // Biên lợi nhuận chung = Σ lợi nhuận / Σ doanh thu = 185 / 500.
+            ->assertSee('37%')
             ->filterTable('margin_band', MarginBand::Danger->value)
-            ->assertCanSeeTableRecords([$projects['danger']])
-            ->assertCanNotSeeTableRecords([$projects['good'], $projects['normal'], $projects['warning']])
+            ->assertCanSeeTableRecords([$contracts['danger']])
+            ->assertCanNotSeeTableRecords([$contracts['good'], $contracts['normal'], $contracts['warning'], $untouched])
             ->removeTableFilter('margin_band')
             ->filterTable('margin_band', MarginBand::Normal->value)
-            ->assertCanSeeTableRecords([$projects['normal']])
-            ->assertCanNotSeeTableRecords([$projects['good'], $projects['warning'], $projects['danger']]);
+            ->assertCanSeeTableRecords([$contracts['normal']])
+            ->assertCanNotSeeTableRecords([$contracts['good'], $contracts['warning'], $contracts['danger']]);
     }
 
     public function test_revenue_report_lists_billed_invoices_and_filters_by_service(): void
@@ -117,13 +124,13 @@ class ReportsTest extends TestCase
 
     public function test_cost_report_lists_actual_cost_lines_from_every_source(): void
     {
-        $project = $this->makeProject();
-        $otherProject = $this->makeProject();
+        $job = $this->makeJob();
+        $otherJob = $this->makeJob();
 
-        $paid = $this->payExpense($this->makeExpense($project, attributes: ['amount' => 4000000]));
-        $unpaid = $this->approveExpense($this->makeExpense($project, attributes: ['amount' => 9000000]));
+        $paid = $this->payExpense($this->makeExpense($job, attributes: ['amount' => 4000000]));
+        $unpaid = $this->approveExpense($this->makeExpense($job, attributes: ['amount' => 9000000]));
         $timesheet = Timesheet::factory()->create([
-            'project_id' => $otherProject->getKey(),
+            'task_id' => $otherJob->getKey(),
             'user_id' => $this->createUserWithRole(SystemRole::Employee, ['hourly_rate' => 100000])->getKey(),
         ]);
 
@@ -139,10 +146,10 @@ class ReportsTest extends TestCase
             ->assertCanSeeTableRecords([$expenseLine, $timesheetLine])
             ->assertCountTableRecords(2)
             ->assertSee('4.800.000 ₫')
-            ->filterTable('project_id', [$project->getKey()])
+            ->filterTable('task_id', [$job->getKey()])
             ->assertCanSeeTableRecords([$expenseLine])
             ->assertCanNotSeeTableRecords([$timesheetLine])
-            ->removeTableFilter('project_id')
+            ->removeTableFilter('task_id')
             ->filterTable('source', 'timesheet')
             ->assertCanSeeTableRecords([$timesheetLine])
             ->assertCanNotSeeTableRecords([$expenseLine]);
@@ -154,7 +161,7 @@ class ReportsTest extends TestCase
         $this->assertSame(12, TableExport::value(12));
         $this->assertSame('15/10/2026', TableExport::value(today()));
         $this->assertSame('15/10/2026 09:00', TableExport::value(now()));
-        $this->assertSame('Đang thực hiện', TableExport::value(ProjectStatus::Active));
+        $this->assertSame(TaskStatus::InProgress->getLabel(), TableExport::value(TaskStatus::InProgress));
         $this->assertSame('Có', TableExport::value(true));
         $this->assertNull(TableExport::value(null));
 
@@ -215,33 +222,46 @@ class ReportsTest extends TestCase
         $this->assertSame('XLSX, 2 dòng', $logs[1]->description);
     }
 
-    public function test_export_needs_the_export_permission_and_hides_costs_from_sales(): void
+    public function test_export_needs_the_export_permission_and_hides_costs_and_contracts(): void
     {
-        $project = $this->makeProject(['status' => ProjectStatus::Active]);
-        $this->payExpense($this->makeExpense($project, attributes: ['amount' => 12345000]));
+        $job = $this->makeJob(['name' => 'Quay TVC mùa thu', 'budget' => 20000000]);
+        $this->payExpense($this->makeExpense($job, attributes: ['amount' => 12345000]));
         $this->issuedInvoice();
 
-        // Kinh doanh xem được dự án, hóa đơn nhưng không có quyền xuất hai danh sách này.
+        // Nhân viên xem được công việc của mình nhưng không có quyền xuất danh sách.
+        $this->actingAs($this->approver(SystemRole::Employee));
+
+        Livewire::test(ManageTasks::class)->assertActionHidden('exportCsv');
+
+        // Kinh doanh xuất được khách hàng, không vào được hóa đơn.
         $this->actingAs($this->approver(SystemRole::Sales));
 
-        Livewire::test(ListProjects::class)->assertActionHidden('exportCsv');
-        Livewire::test(ListInvoices::class)->assertActionHidden('exportCsv');
         Livewire::test(ListCustomers::class)->assertActionVisible('exportCsv');
+        $this->assertFalse($this->approver(SystemRole::Sales)->can('invoices.view'));
 
-        // Quản lý dự án xuất được dự án, có cột chi phí.
+        // Quản lý công việc xuất được công việc, có cột chi phí nhưng KHÔNG có cột hợp đồng, báo giá.
         $this->actingAs($this->approver(SystemRole::ProjectManager));
 
-        $csv = base64_decode(Livewire::test(ListProjects::class)->callAction('exportCsv')->effects['download']['content']);
+        $csv = base64_decode(Livewire::test(ManageTasks::class)->set('activeTab', 'all')->callAction('exportCsv')->effects['download']['content']);
 
         $this->assertStringContainsString('"Chi phí thực tế"', $csv);
         $this->assertStringContainsString('12345000', $csv);
+        $this->assertStringNotContainsString('Hợp đồng', $csv);
+        $this->assertStringNotContainsString('Báo giá', $csv);
+        $this->assertStringNotContainsString($job->contract->code, $csv);
 
-        // Báo cáo tài chính có nút xuất riêng theo quyền của báo cáo.
+        // Kế toán xuất cùng danh sách thì có mã hợp đồng.
         $this->actingAs($this->approver(SystemRole::Accountant));
 
+        $csv = base64_decode(Livewire::test(ManageTasks::class)->set('activeTab', 'all')->callAction('exportCsv')->effects['download']['content']);
+
+        $this->assertStringContainsString('"Hợp đồng"', $csv);
+        $this->assertStringContainsString($job->contract->code, $csv);
+
+        // Báo cáo tài chính có nút xuất riêng theo quyền của báo cáo.
         $report = base64_decode(Livewire::test(ProfitReport::class)->callAction('exportCsv')->assertFileDownloaded()->effects['download']['content']);
 
-        $this->assertStringContainsString($project->code, $report);
+        $this->assertStringContainsString($job->contract->code, $report);
         $this->assertStringContainsString('87655000', $report);
     }
 }

@@ -6,6 +6,7 @@ use App\Enums\ContractStatus;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasDocumentCode;
+use App\Services\Contracts\ContractFinancials;
 use App\Support\Decimal;
 use Database\Factories\ContractFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -60,6 +61,13 @@ class Contract extends Model
         'contract_value' => 0,
         'tax_amount' => 0,
         'total_value' => 0,
+        'budget' => 0,
+        'committed_cost' => 0,
+        'actual_cost' => 0,
+        'actual_profit' => 0,
+        'profit_margin' => 0,
+        'invoiced_amount' => 0,
+        'collected_amount' => 0,
     ];
 
     /**
@@ -71,6 +79,13 @@ class Contract extends Model
             'contract_value' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'total_value' => 'decimal:2',
+            'budget' => 'decimal:2',
+            'committed_cost' => 'decimal:2',
+            'actual_cost' => 'decimal:2',
+            'actual_profit' => 'decimal:2',
+            'profit_margin' => 'decimal:2',
+            'invoiced_amount' => 'decimal:2',
+            'collected_amount' => 'decimal:2',
             'sign_date' => 'date',
             'start_date' => 'date',
             'end_date' => 'date',
@@ -87,6 +102,19 @@ class Contract extends Model
 
         static::saving(function (Contract $contract): void {
             $contract->total_value = Decimal::add($contract->contract_value, $contract->tax_amount);
+        });
+
+        // Hợp đồng mới chưa có chi phí: lợi nhuận bằng đúng giá trị hợp đồng.
+        static::creating(function (Contract $contract): void {
+            $contract->actual_profit = $contract->contract_value;
+            $contract->profit_margin = Decimal::isPositive($contract->contract_value) ? 100 : 0;
+        });
+
+        // Đổi giá trị hợp đồng → tính lại lợi nhuận.
+        static::updated(function (Contract $contract): void {
+            if ($contract->wasChanged('contract_value')) {
+                app(ContractFinancials::class)->recalculate($contract);
+            }
         });
     }
 
@@ -111,13 +139,21 @@ class Contract extends Model
         return $this->end_date === null ? null : (int) today()->diffInDays($this->end_date, false);
     }
 
+    /**
+     * Đã xuất hóa đơn nhưng chưa thu (gồm thuế).
+     */
+    public function outstandingAmount(): string
+    {
+        return Decimal::sub($this->invoiced_amount, $this->collected_amount);
+    }
+
     public function isExpiringSoon(): bool
     {
         $days = $this->daysUntilEnd();
 
         return $this->isActive()
             && $days !== null
-            && $days <= (int) config('project.contract_expiry_warning_days', 30);
+            && $days <= (int) config('job.contract_expiry_warning_days', 30);
     }
 
     /**
@@ -150,11 +186,21 @@ class Contract extends Model
     }
 
     /**
-     * @return HasMany<Project, $this>
+     * Các công việc thực hiện hợp đồng này: chi phí của chúng là chi phí của hợp đồng.
+     *
+     * @return HasMany<Task, $this>
      */
-    public function projects(): HasMany
+    public function tasks(): HasMany
     {
-        return $this->hasMany(Project::class);
+        return $this->hasMany(Task::class);
+    }
+
+    /**
+     * @return HasMany<Acceptance, $this>
+     */
+    public function acceptances(): HasMany
+    {
+        return $this->hasMany(Acceptance::class);
     }
 
     /**

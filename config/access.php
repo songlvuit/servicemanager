@@ -41,7 +41,7 @@ return [
     'groups' => [
         'Tổng quan',
         'Kinh doanh',
-        'Dự án',
+        'Vận hành',
         'Tài chính',
         'Hệ thống',
     ],
@@ -116,61 +116,43 @@ return [
             'abilities' => ['view', 'create', 'update', 'delete'],
         ],
 
-        // --- Dự án --------------------------------------------------------
-        'projects' => [
-            'label' => 'Dự án',
-            'group' => 'Dự án',
-            'icon' => 'heroicon-o-briefcase',
-            'sort' => 10,
-            'phase' => 3,
-            'menu' => true,
-            // view_all: xem mọi dự án; không có thì chỉ thấy dự án mình tham gia.
-            'abilities' => ['view', 'view_all', 'create', 'update', 'delete', 'export'],
-        ],
+        // --- Vận hành: công việc và chi phí của công việc ---------------------
         'tasks' => [
             'label' => 'Công việc',
-            'group' => 'Dự án',
+            'group' => 'Vận hành',
             'icon' => 'heroicon-o-rectangle-stack',
             'sort' => 20,
             'phase' => 3,
             'menu' => true,
-            // view_all: xem mọi công việc; không có thì chỉ thấy việc được giao.
-            'abilities' => ['view', 'view_all', 'create', 'update', 'delete'],
+            // view_all: xem mọi công việc; không có thì chỉ thấy việc được giao hoặc mình có trong ê-kíp.
+            // Hợp đồng / báo giá gắn với công việc chỉ hiện với người có quyền xem Hợp đồng / Báo giá.
+            'abilities' => ['view', 'view_all', 'create', 'update', 'delete', 'export'],
         ],
         'timesheets' => [
             'label' => 'Chấm công',
-            'group' => 'Dự án',
+            'group' => 'Vận hành',
             'icon' => 'heroicon-o-clock',
             'sort' => 25,
             'phase' => 4,
             'menu' => true,
             // view_all: xem và ghi giờ công của mọi người; không có thì chỉ của mình.
-            'abilities' => ['view', 'view_all', 'create', 'update', 'delete'],
-        ],
-        'budgets' => [
-            'label' => 'Ngân sách',
-            'group' => 'Dự án',
-            'icon' => 'heroicon-o-calculator',
-            'sort' => 30,
-            'phase' => 3,
-            'menu' => true,
-            'abilities' => ['view', 'create', 'update', 'delete', 'export'],
+            'abilities' => ['view', 'view_all', 'create', 'update', 'delete', 'export'],
         ],
         'expenses' => [
             'label' => 'Chi phí',
-            'group' => 'Dự án',
+            'group' => 'Vận hành',
             'icon' => 'heroicon-o-banknotes',
             'sort' => 40,
             'phase' => 4,
             'menu' => true,
-            // view_all: xem mọi đề nghị chi; không có thì chỉ của mình và của dự án mình quản lý.
+            // view_all: xem mọi đề nghị chi; không có thì chỉ của mình và của công việc mình phụ trách.
             // Ai được duyệt đề nghị chi do Hệ thống → Quy trình duyệt quyết định (theo vai trò),
             // nên module này không có quyền "Duyệt".
             'abilities' => ['view', 'view_all', 'create', 'update', 'delete', 'pay', 'export'],
         ],
         'purchases' => [
             'label' => 'Mua hàng',
-            'group' => 'Dự án',
+            'group' => 'Vận hành',
             'icon' => 'heroicon-o-shopping-cart',
             'sort' => 50,
             'phase' => 4,
@@ -181,24 +163,24 @@ return [
         ],
         'suppliers' => [
             'label' => 'Nhà cung cấp',
-            'group' => 'Dự án',
+            'group' => 'Vận hành',
             'icon' => 'heroicon-o-truck',
             'sort' => 60,
             'phase' => 4,
             'menu' => true,
             'abilities' => ['view', 'create', 'update', 'delete'],
         ],
+        // --- Tài chính ----------------------------------------------------
+        // Nghiệm thu, hóa đơn, công nợ, thanh toán đều theo HỢP ĐỒNG.
         'acceptances' => [
             'label' => 'Nghiệm thu',
-            'group' => 'Dự án',
+            'group' => 'Tài chính',
             'icon' => 'heroicon-o-clipboard-document-check',
-            'sort' => 70,
+            'sort' => 5,
             'phase' => 5,
             'menu' => true,
             'abilities' => ['view', 'create', 'update', 'delete', 'approve'],
         ],
-
-        // --- Tài chính ----------------------------------------------------
         'invoices' => [
             'label' => 'Hóa đơn',
             'group' => 'Tài chính',
@@ -319,7 +301,7 @@ return [
     'role_defaults' => [
 
         // Xem toàn bộ hệ thống, duyệt các khoản quan trọng, xem tài chính & lợi nhuận.
-        // Quản lý luôn danh mục dịch vụ (giá bán, giá vốn mặc định).
+        // Quản lý danh mục dịch vụ, và cùng Kế toán lập báo giá, hợp đồng, nghiệm thu.
         'Director' => [
             '*.view',
             '*.view_all',
@@ -328,42 +310,42 @@ return [
             'services.*',
             'schedules.*',
             'schedule_types.*',
+            'tasks.*',
+            'quotations.*',
+            'contracts.*',
+            'acceptances.*',
         ],
 
-        // Khách hàng, cơ hội, báo giá, hợp đồng. Không xem chi phí nội bộ.
+        // Khách hàng và cơ hội. Báo giá, hợp đồng và mọi số tiền của hợp đồng
+        // chỉ Giám đốc và Kế toán xem được.
         'Sales' => [
             'customers.*',
             'opportunities.*',
-            'quotations.view', 'quotations.create', 'quotations.update', 'quotations.delete', 'quotations.export',
-            'contracts.view', 'contracts.create', 'contracts.update',
             'services.view',
-            'projects.view', 'projects.view_all',
-            'invoices.view',
-            'receivables.view',
-            'payments.view',
         ],
 
-        // Dự án, công việc, nhân sự dự án, ngân sách, đề nghị chi.
+        // Công việc, lịch làm việc, chấm công, đề nghị chi, mua hàng. Không xem hợp đồng, báo giá.
         'Project Manager' => [
             'schedules.*',
             'schedule_types.*',
-            'projects.*',
             'tasks.*',
             'timesheets.*',
-            'budgets.*',
             'expenses.view', 'expenses.view_all', 'expenses.create', 'expenses.update', 'expenses.export',
             'purchases.view', 'purchases.create', 'purchases.update',
             'suppliers.view',
-            'acceptances.view', 'acceptances.create', 'acceptances.update',
             'customers.view',
-            'contracts.view',
             'services.view',
             'internal_costs.view',
         ],
 
-        // Chi phí, hóa đơn, thanh toán, công nợ, nhà cung cấp.
+        // Báo giá, hợp đồng, nghiệm thu, hóa đơn, thanh toán, công nợ, chi phí, nhà cung cấp.
+        // Duyệt báo giá / hợp đồng vẫn là việc của Giám đốc.
         'Accountant' => [
+            'quotations.view', 'quotations.create', 'quotations.update', 'quotations.export',
+            'contracts.view', 'contracts.create', 'contracts.update',
+            'acceptances.view', 'acceptances.create', 'acceptances.update',
             'expenses.view', 'expenses.view_all', 'expenses.update', 'expenses.pay', 'expenses.export',
+            'tasks.view', 'tasks.view_all', 'tasks.export',
             'timesheets.view', 'timesheets.view_all',
             'invoices.*',
             'payments.*',
@@ -371,12 +353,9 @@ return [
             'suppliers.*',
             'profit_reports.*',
             'customers.view',
-            'contracts.view',
+            'opportunities.view',
             'services.view',
-            'projects.view', 'projects.view_all',
-            'budgets.view',
             'purchases.view',
-            'acceptances.view',
             'internal_costs.view',
         ],
 
@@ -384,13 +363,11 @@ return [
         'Procurement' => [
             'suppliers.*',
             'purchases.view', 'purchases.create', 'purchases.update', 'purchases.delete',
-            'projects.view', 'projects.view_all',
             'internal_costs.view',
         ],
 
-        // Xem dự án/công việc được giao (không có view_all), cập nhật công việc, tạo đề nghị chi.
+        // Xem công việc được giao (không có view_all), cập nhật công việc, chấm công, tạo đề nghị chi.
         'Employee' => [
-            'projects.view',
             'tasks.view', 'tasks.update',
             'timesheets.view', 'timesheets.create', 'timesheets.update', 'timesheets.delete',
             'expenses.view', 'expenses.create',

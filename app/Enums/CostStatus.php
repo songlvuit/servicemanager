@@ -50,7 +50,7 @@ enum CostStatus: string implements HasColor, HasLabel
             return self::Over;
         }
 
-        $warningLevel = Decimal::percentOf($budget, config('project.budget_warning_threshold', 80));
+        $warningLevel = Decimal::percentOf($budget, config('job.budget_warning_threshold', 80));
 
         return Decimal::compare($actual, $warningLevel) >= 0 ? self::Warning : self::Ok;
     }
@@ -61,13 +61,13 @@ enum CostStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * Dòng cảnh báo hiển thị trên trang dự án.
+     * Dòng cảnh báo hiển thị trên trang công việc.
      */
     public function message(): ?string
     {
         return match ($this) {
             self::Over => '🔴 Vượt ngân sách: chi phí thực tế đã lớn hơn ngân sách.',
-            self::Warning => '🟠 Cảnh báo: chi phí thực tế đã đạt từ '.rtrim(rtrim(number_format((float) config('project.budget_warning_threshold', 80), 2, ',', '.'), '0'), ',').'% ngân sách.',
+            self::Warning => '🟠 Cảnh báo: chi phí thực tế đã đạt từ '.rtrim(rtrim(number_format((float) config('job.budget_warning_threshold', 80), 2, ',', '.'), '0'), ',').'% ngân sách.',
             default => null,
         };
     }

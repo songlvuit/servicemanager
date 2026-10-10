@@ -2,38 +2,98 @@
 
 namespace App\Services\Tasks;
 
-use App\Models\Customer;
-use App\Models\Expense;
-use App\Models\Project;
-use App\Models\PurchaseOrder;
-use App\Models\PurchaseRequest;
-use App\Models\ScheduleEntry;
 use App\Models\Task;
-use App\Models\Timesheet;
-use App\Services\Projects\ProjectCostCollector;
-use App\Services\Projects\ProjectFinancials;
+use App\Services\Contracts\ContractFinancials;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Tiền của MỘT công việc: ngân sách do người quản lý nhập, còn chi phí được
- * tính từ các chứng từ gắn vào công việc (đề nghị chi, mua hàng, giờ công) theo
- * đúng quy tắc của chi phí dự án — xem ProjectCostCollector.
+ * tính từ các chứng từ gắn vào công việc và vào các công việc con của nó (đề
+ * nghị chi, mua hàng, giờ công) — xem TaskCostCollector.
  *
  *   committed_cost = Σ chi phí đã cam kết (gồm cả phần đã chi)
  *   actual_cost    = Σ chi phí thực tế
  *
- * Gọi recalculate() mỗi khi một chứng từ của công việc thay đổi.
+ * Gọi recalculate() mỗi khi một chứng từ của công việc thay đổi. Chi phí của
+ * hợp đồng là tổng chi phí các công việc cấp cao nhất gắn với nó — xem
+ * ContractFinancials.
  */
 class TaskFinancials
 {
+    private static bool $silent = false;
+
     public function __construct(
-        private readonly ProjectCostCollector $costs,
-        private readonly ProjectFinancials $projects,
+        private readonly TaskCostCollector $costs,
+        private readonly TaskNotifier $notifier,
+        private readonly ContractFinancials $contracts,
     ) {}
 
+    /**
+     * Tính lại chi phí của công việc và của các công việc cha của nó (chi phí
+     * của việc con được tính vào việc cha), rồi tới hợp đồng.
+     */
     public function recalculate(Task $task): Task
     {
-        $cost = $this->costs->forTask($task);
+        $this->refresh($task);
+
+        $seen = [$task->getKey()];
+        $parentId = $task->parent_id;
+
+        while ($parentId !== null && ! in_array($parentId, $seen, true)) {
+            $parent = Task::query()->find($parentId);
+
+            if ($parent === null) {
+                break;
+            }
+
+            $this->refresh($parent);
+            $seen[] = $parent->getKey();
+            $parentId = $parent->parent_id;
+        }
+
+        // Chi phí của công việc là chi phí của hợp đồng mà nó thuộc về.
+        $this->contracts->recalculateMany([$task->contract_id]);
+
+        return $task;
+    }
+
+    /**
+     * Tính lại mà không gửi thông báo "vượt ngân sách" — dùng khi chuyển đổi
+     * dữ liệu hàng loạt (migration), lúc đó không có gì thật sự "vừa" vượt.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public static function silently(callable $callback): mixed
+    {
+        $previous = self::$silent;
+        self::$silent = true;
+
+        try {
+            return $callback();
+        } finally {
+            self::$silent = $previous;
+        }
+    }
+
+    /**
+     * @param  iterable<int|string|null>  $taskIds  Bỏ qua id rỗng / không còn tồn tại.
+     */
+    public function recalculateMany(iterable $taskIds): void
+    {
+        $ids = array_values(array_unique(array_filter([...$taskIds])));
+
+        foreach ($ids === [] ? [] : Task::query()->whereKey($ids)->get() as $task) {
+            $this->recalculate($task);
+        }
+    }
+
+    private function refresh(Task $task): void
+    {
+        $wasOver = $task->isOverBudget();
+        $cost = $this->costs->totals($task);
 
         // Ghi thẳng bằng query để không kích hoạt lại các sự kiện của công việc.
         Task::query()->whereKey($task->getKey())->update([
@@ -45,50 +105,9 @@ class TaskFinancials
         $task->setAttribute('actual_cost', $cost['actual']);
         $task->syncOriginalAttributes(['committed_cost', 'actual_cost']);
 
-        return $task;
-    }
-
-    /**
-     * Chuyển công việc sang dự án khác (hoặc về "không gắn dự án"). Chứng từ và
-     * lịch của công việc luôn theo dự án của công việc, nên được chuyển cùng;
-     * chi phí của dự án cũ và dự án mới được tính lại.
-     */
-    public function moveToProject(Task $task, ?int $projectId): Task
-    {
-        $from = $task->project_id;
-
-        if ($from === $projectId) {
-            return $task;
+        // Rule 7: vừa chuyển sang vượt ngân sách thì báo cho người quản lý chi phí.
+        if (! self::$silent && ! $wasOver && $task->isOverBudget()) {
+            DB::afterCommit(fn () => $this->notifier->overBudget($task));
         }
-
-        return DB::transaction(function () use ($task, $from, $projectId): Task {
-            // Công việc con (nếu có) đi cùng công việc cha.
-            $taskIds = [$task->getKey(), ...$task->children()->pluck('id')->all()];
-
-            Task::query()->whereKey($taskIds)->update(['project_id' => $projectId]);
-
-            foreach ([Expense::class, PurchaseRequest::class, PurchaseOrder::class, Timesheet::class] as $model) {
-                $model::query()->whereIn('task_id', $taskIds)->update(['project_id' => $projectId]);
-            }
-
-            $customerId = $projectId !== null ? Project::query()->withTrashed()->whereKey($projectId)->value('customer_id') : null;
-
-            ScheduleEntry::query()->whereIn('task_id', $taskIds)->update([
-                'project_id' => $projectId,
-                // Gắn vào dự án thì khách hàng theo dự án; gỡ dự án thì giữ khách hàng đang có.
-                ...($customerId !== null && Customer::query()->withTrashed()->whereKey($customerId)->exists() ? ['customer_id' => $customerId] : []),
-            ]);
-
-            $task->setAttribute('project_id', $projectId);
-            $task->syncOriginalAttribute('project_id');
-            $task->unsetRelation('project');
-
-            foreach (Project::query()->withTrashed()->whereKey(array_filter([$from, $projectId]))->get() as $project) {
-                $this->projects->recalculate($project);
-                $this->projects->recalculateProgress($project);
-            }
-
-            return $task;
-        });
     }
 }

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
 
 /**
- * Tài liệu đính kèm của một chứng từ (hợp đồng, dự án, chi phí, hóa đơn...).
+ * Tài liệu đính kèm của một chứng từ (hợp đồng, chi phí, hóa đơn...).
  * File nằm ở disk riêng tư; tải về qua route attachments.show có kiểm tra quyền.
  */
 class Attachment extends Model

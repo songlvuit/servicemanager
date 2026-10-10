@@ -18,7 +18,6 @@
                         <span class="sm-day-name">{{ $day['weekday'] }}</span>
                         <span class="sm-day-date">{{ $day['date']->format('d/m') }}</span>
                     </span>
-
                 </header>
 
                 <div class="sm-day-meta">
@@ -42,13 +41,6 @@
                             @endforeach
                         </details>
                     @endif
-
-                    @foreach ($day['milestones'] as $milestone)
-                        <div class="sm-chip is-milestone" title="{{ $milestone }}">
-                            @svg('heroicon-m-flag')
-                            <span class="sm-chip-text">{{ $milestone }}</span>
-                        </div>
-                    @endforeach
                 </div>
 
                 @foreach ($bands as $band => $bandLabel)

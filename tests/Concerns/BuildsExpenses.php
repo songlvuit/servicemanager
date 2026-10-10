@@ -5,7 +5,7 @@ namespace Tests\Concerns;
 use App\Enums\PaymentMethod;
 use App\Enums\SystemRole;
 use App\Models\Expense;
-use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\Expenses\ExpenseWorkflow;
 
@@ -19,14 +19,15 @@ trait BuildsExpenses
     private array $approvers = [];
 
     /**
-     * Đề nghị chi nháp (mặc định 1.000.000, không thuế, nhóm "Khác").
+     * Đề nghị chi nháp (mặc định 1.000.000, không thuế, nhóm "Khác"), gắn vào
+     * một công việc — tạo mới nếu không truyền.
      *
      * @param  array<string, mixed>  $attributes
      */
-    protected function makeExpense(?Project $project = null, ?User $employee = null, array $attributes = []): Expense
+    protected function makeExpense(?Task $task = null, ?User $employee = null, array $attributes = []): Expense
     {
         return Expense::factory()->create([
-            'project_id' => ($project ?? Project::factory()->create())->getKey(),
+            'task_id' => ($task ?? Task::factory()->create())->getKey(),
             'employee_id' => ($employee ?? $this->approver(SystemRole::Employee))->getKey(),
             ...$attributes,
         ])->refresh();

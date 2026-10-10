@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Enums\PaymentMethod;
 use App\Models\Acceptance;
 use App\Models\Invoice;
-use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\Billing\AcceptanceWorkflow;
 use App\Services\Billing\InvoiceWorkflow;
@@ -36,20 +36,21 @@ class DemoBillingSeeder extends Seeder
         }
 
         $users = User::query()
-            ->whereIn('email', ['pm@example.com', 'accounting@example.com', 'director@example.com'])
+            ->whereIn('email', ['accounting@example.com', 'director@example.com'])
             ->get()
             ->keyBy(fn (User $user): string => strstr($user->email, '@', true));
 
-        $projects = Project::query()->orderBy('id')->get()->values();
+        // Chứng từ lập theo hợp đồng của từng công việc lớn.
+        $jobs = Task::query()->whereNull('parent_id')->whereNotNull('contract_id')->orderBy('id')->get()->values();
 
-        if ($users->count() < 3 || $projects->count() < 8) {
-            $this->command?->warn('Bỏ qua DemoBillingSeeder: chưa có tài khoản mẫu hoặc dự án mẫu (chạy các seeder trước đó).');
+        if ($users->count() < 2 || $jobs->count() < 8) {
+            $this->command?->warn('Bỏ qua DemoBillingSeeder: chưa có tài khoản mẫu hoặc công việc mẫu (chạy các seeder trước đó).');
 
             return;
         }
 
         /*
-         * Biên bản nghiệm thu: [khoá, dự án, nội dung, giá trị, số ngày trước, trạng thái cuối]
+         * Biên bản nghiệm thu: [khoá, công việc, nội dung, giá trị, số ngày trước, trạng thái cuối]
          */
         $acceptanceRows = [
             ['lookbook', 4, 'Nghiệm thu toàn bộ bộ ảnh lookbook Thu Đông', 46000000, 46, 'approved'],
@@ -60,18 +61,18 @@ class DemoBillingSeeder extends Seeder
 
         $accepted = [];
 
-        foreach ($acceptanceRows as [$key, $projectIndex, $description, $amount, $daysAgo, $final]) {
+        foreach ($acceptanceRows as [$key, $jobIndex, $description, $amount, $daysAgo, $final]) {
             $acceptance = new Acceptance([
-                'project_id' => $projects[$projectIndex]->getKey(),
+                'contract_id' => $jobs[$jobIndex]->contract_id,
                 'description' => $description,
                 'acceptance_date' => today()->subDays($daysAgo),
                 'amount' => $amount,
             ]);
-            $acceptance->created_by = $users['pm']->getKey();
+            $acceptance->created_by = $users['accounting']->getKey();
             $acceptance->save();
 
             if ($final !== 'draft') {
-                $acceptance = $acceptances->submit($acceptance, $users['pm']);
+                $acceptance = $acceptances->submit($acceptance, $users['accounting']);
             }
 
             if ($final === 'approved') {
@@ -82,7 +83,7 @@ class DemoBillingSeeder extends Seeder
         }
 
         /*
-         * Hóa đơn: [dự án, biên bản|null, nội dung, trước thuế, lập cách đây (ngày), hạn (ngày), phát hành?, thanh toán]
+         * Hóa đơn: [công việc, biên bản|null, nội dung, trước thuế, lập cách đây (ngày), hạn (ngày), phát hành?, thanh toán]
          * Thanh toán: [số tiền, cách đây (ngày)] — 'rest' = thu hết số còn lại.
          */
         $invoiceRows = [
@@ -103,14 +104,13 @@ class DemoBillingSeeder extends Seeder
             [1, null, 'Phí bản quyền nhạc nền phát sinh', 4000000, 0, 15, false, []],
         ];
 
-        foreach ($invoiceRows as [$projectIndex, $acceptanceKey, $description, $subtotal, $daysAgo, $term, $issue, $paymentRows]) {
-            $project = $projects[$projectIndex];
+        foreach ($invoiceRows as [$jobIndex, $acceptanceKey, $description, $subtotal, $daysAgo, $term, $issue, $paymentRows]) {
+            $job = $jobs[$jobIndex];
             $date = today()->subDays($daysAgo);
 
             $invoice = new Invoice([
-                'customer_id' => $project->customer_id,
-                'contract_id' => $project->contract_id,
-                'project_id' => $project->getKey(),
+                'customer_id' => $job->customer_id,
+                'contract_id' => $job->contract_id,
                 'acceptance_id' => $acceptanceKey === null ? null : $accepted[$acceptanceKey]->getKey(),
                 'description' => $description,
                 'invoice_date' => $date,

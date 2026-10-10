@@ -12,7 +12,6 @@ use App\Filament\Resources\Customers\Pages\ViewCustomer;
 use App\Filament\Resources\Customers\RelationManagers\ContactsRelationManager;
 use App\Filament\Resources\Customers\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\Customers\RelationManagers\OpportunitiesRelationManager;
-use App\Filament\Resources\Customers\RelationManagers\ProjectsRelationManager;
 use App\Filament\Resources\Customers\RelationManagers\QuotationsRelationManager;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Customers\Schemas\CustomerInfolist;
@@ -74,7 +73,6 @@ class CustomerResource extends Resource
             'opportunities' => OpportunitiesRelationManager::class,
             'quotations' => QuotationsRelationManager::class,
             'contracts' => ContractsRelationManager::class,
-            'projects' => ProjectsRelationManager::class,
             'invoices' => InvoicesRelationManager::class,
             'payments' => PaymentsRelationManager::class,
             'attachments' => AttachmentsRelationManager::class,
